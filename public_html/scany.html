@@ -24,19 +24,21 @@
             border-radius: 30px;
             box-shadow: 0 25px 60px rgba(0,0,0,0.5);
             width: 100%;
-            max-width: 1100px;
+            max-width: 1200px;
             text-align: left;
+            box-sizing: border-box;
         }
 
         .logo {
             text-align: center;
             font-weight: 800;
-            letter-spacing: 0.3rem;
+            letter-spacing: 0.1rem;
             font-size: clamp(2.5rem, 6vw, 4rem);
             margin-bottom: 8px;
+            color: white;
         }
 
-        .logo span {
+        .logo .period {
             color: #2fd2ff;
         }
 
@@ -85,6 +87,7 @@
             padding: 18px;
             margin-bottom: 20px;
             width: 100%;
+            box-sizing: border-box;
         }
 
         .card h2 {
@@ -216,6 +219,7 @@
             background: rgba(255,255,255,0.05);
             border-radius: 10px;
             padding: 14px;
+            box-sizing: border-box;
         }
 
         .metric-label {
@@ -240,14 +244,69 @@
             margin: 0 0 8px 0;
             color: #c4c9f1;
         }
+
+        /* Responsive padding adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+            }
+            
+            .card {
+                padding: 14px;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .container {
+                padding: 2.5rem 3rem;
+            }
+        }
+
+        .bluetooth-status-banner {
+            background: rgba(234, 179, 8, 0.1);
+            border: 2px solid rgba(234, 179, 8, 0.5);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .bluetooth-status-banner.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
 
-    <div>
+    <div class="container">
         <div class="logo" translate="no" aria-label="SUPLY logo">SUPLY.</div>
         <h1 id="header-text">Suply BLE Device Scanner</h1>
         <p id="sub-text">Connect to Suply Echo / BT03 loggers, extract sensor data, and upload directly to Suply.</p>
+
+        <!-- Bluetooth Status Banner -->
+        <div id="bluetooth-status-banner" class="bluetooth-status-banner hidden">
+            <div style="display: flex; align-items: start; gap: 12px;">
+                <!-- <div style="flex-shrink: 0;">
+                    <svg style="width: 24px; height: 24px; color: #fbbf24;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div> -->
+                <div style="flex: 1;">
+                    <h3 style="color: #fbbf24; font-weight: bold; font-size: 1.125rem; margin-bottom: 4px;">Bluetooth is Turned Off</h3>
+                    <p style="color: #fde68a; font-size: 0.875rem; margin-bottom: 8px;">
+                        Please enable Bluetooth on your device to scan BT03 Suply Echo loggers.
+                    </p>
+                    <button id="check-bluetooth-btn" style="font-size: 0.75rem; background: #fbbf24; color: #1f2937; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; transition: background 0.2s;">
+                        Check Again
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <div class="card">
             <div class="grid grid-2">
@@ -471,16 +530,102 @@
             deviceInfo: {
                 deviceId: 'Unknown',
                 isEncrypted: false
-            }
+            },
+            bluetoothEnabled: null,
+            checkingBluetooth: true
         };
+
+        /* ===== Console Interception ===== */
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+
+        function interceptConsole() {
+            const addConsoleLog = (type, args) => {
+                const timestamp = new Date().toLocaleTimeString();
+                const message = args.map(arg => {
+                    if (arg instanceof Error) {
+                        return `Error: ${arg.name}\nMessage: ${arg.message}\nStack: ${arg.stack || 'No stack trace'}`;
+                    } else if (typeof arg === 'object' && arg !== null) {
+                        try {
+                            if (arg.name || arg.message || arg.stack) {
+                                return `Error Object:\n  Name: ${arg.name || 'Unknown'}\n  Message: ${arg.message || 'No message'}\n  Stack: ${arg.stack || 'No stack trace'}`;
+                            }
+                            return JSON.stringify(arg, null, 2);
+                        } catch (e) {
+                            return String(arg);
+                        }
+                    }
+                    return String(arg);
+                }).join(' ');
+
+                state.consoleLogs.unshift({ timestamp, type, message });
+                if (state.consoleLogs.length > 500) state.consoleLogs.pop();
+                
+                // Update log display
+                renderLogs();
+            };
+
+            console.log = (...args) => {
+                originalConsole.log.apply(console, args);
+                addConsoleLog('log', args);
+            };
+
+            console.error = (...args) => {
+                originalConsole.error.apply(console, args);
+                addConsoleLog('error', args);
+            };
+
+            console.warn = (...args) => {
+                originalConsole.warn.apply(console, args);
+                addConsoleLog('warn', args);
+            };
+
+            console.info = (...args) => {
+                originalConsole.info.apply(console, args);
+                addConsoleLog('info', args);
+            };
+        }
+
+        function renderLogs() {
+            if (state.consoleLogs.length === 0) {
+                dom.log.innerHTML = '<div style="text-align:center;color:#777;padding:20px;">No activity yet</div>';
+                return;
+            }
+
+            dom.log.innerHTML = state.consoleLogs.map(log => {
+                const bgColor = log.type === 'error' ? 'rgba(239, 68, 68, 0.1)' :
+                               log.type === 'warn' ? 'rgba(234, 179, 8, 0.1)' :
+                               log.type === 'info' ? 'rgba(59, 130, 246, 0.1)' :
+                               'rgba(31, 41, 55, 0.5)';
+                const borderColor = log.type === 'error' ? '#ef4444' :
+                                   log.type === 'warn' ? '#eab308' :
+                                   log.type === 'info' ? '#3b82f6' :
+                                   '#4b5563';
+                const textColor = log.type === 'error' ? '#fca5a5' :
+                                 log.type === 'warn' ? '#fde68a' :
+                                 log.type === 'info' ? '#93c5fd' :
+                                 '#e5e7eb';
+
+                return `<div class="log-entry" style="background: ${bgColor}; border-left: 3px solid ${borderColor}; color: ${textColor}; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px;">
+                    <div style="display: flex; align-items: start; gap: 8px; font-size: 11px;">
+                        <span style="color: #9ca3af; font-family: monospace; font-size: 10px; flex-shrink: 0; margin-top: 2px;">${log.timestamp}</span>
+                        <pre style="white-space: pre-wrap; word-break: break-word; flex: 1; font-family: monospace; font-size: 11px; line-height: 1.5; margin: 0;">${log.message}</pre>
+                    </div>
+                </div>`;
+            }).join('');
+        }
 
         /* ===== Utilities ===== */
         function log(message, type = 'info') {
             const timestamp = new Date().toLocaleTimeString();
-            const entry = `<div class="log-entry"><span>[${timestamp}]</span>${type.toUpperCase()}: ${message}</div>`;
-            dom.log.innerHTML = entry + dom.log.innerHTML;
             state.consoleLogs.unshift({ timestamp, type, message });
             if (state.consoleLogs.length > 500) state.consoleLogs.pop();
+            renderLogs();
+            originalConsole[type === 'error' ? 'error' : type === 'warn' ? 'warn' : 'log'](`[BLE] ${message}`);
         }
 
         function setIndicator(indicator, ok) {
@@ -548,15 +693,69 @@
             return supported;
         }
 
+        async function checkBluetoothStatus() {
+            state.checkingBluetooth = true;
+            log('Checking Bluetooth status...', 'info');
+            
+            try {
+                const bluetooth = navigator.bluetooth;
+                
+                if (bluetooth && bluetooth.getAvailability) {
+                    const available = await bluetooth.getAvailability();
+                    state.bluetoothEnabled = available;
+                    
+                    const banner = document.getElementById('bluetooth-status-banner');
+                    if (!available) {
+                        log('⚠️ Bluetooth is turned off', 'warn');
+                        if (banner) banner.classList.remove('hidden');
+                    } else {
+                        log('✓ Bluetooth is enabled and ready', 'info');
+                        if (banner) banner.classList.add('hidden');
+                    }
+                    
+                    // Listen for availability changes
+                    if (bluetooth.addEventListener) {
+                        bluetooth.addEventListener('availabilitychanged', (event) => {
+                            state.bluetoothEnabled = event.value;
+                            if (event.value) {
+                                log('✓ Bluetooth enabled', 'info');
+                                if (banner) banner.classList.add('hidden');
+                            } else {
+                                log('⚠️ Bluetooth disabled', 'warn');
+                                if (banner) banner.classList.remove('hidden');
+                            }
+                        });
+                    }
+                } else {
+                    log('Bluetooth availability check not supported, assuming available', 'info');
+                    state.bluetoothEnabled = true;
+                    const banner = document.getElementById('bluetooth-status-banner');
+                    if (banner) banner.classList.add('hidden');
+                }
+            } catch (error) {
+                log(`Error checking Bluetooth: ${error.message}`, 'error');
+                console.error('Error checking Bluetooth status:', error);
+                state.bluetoothEnabled = true; // Assume available if we can't check
+            } finally {
+                state.checkingBluetooth = false;
+            }
+        }
+
         /* ===== BLE Logic ===== */
         async function scanForDevice() {
             if (!ensureSecureContext() || !ensureBleSupport()) return;
+
+            if (state.bluetoothEnabled === false) {
+                log('Bluetooth is turned off. Please enable Bluetooth on your device.', 'error');
+                alertUser('Bluetooth is turned off. Please enable it first.', true);
+                return;
+            }
 
             try {
                 state.isScanning = true;
                 setButtonsState();
                 alertUser('Check browser popup to select a device...');
-                log('Opening device selector...');
+                log('Opening device selector...', 'info');
 
                 const options = state.debugMode
                     ? { acceptAllDevices: true, optionalServices: COMMON_BLE_SERVICES }
@@ -572,12 +771,24 @@
 
                 const bleDevice = await navigator.bluetooth.requestDevice(options);
                 state.device = bleDevice;
-                log(`Device selected: ${bleDevice.name || 'Unknown'} (${bleDevice.id})`);
+                log(`Device selected: ${bleDevice.name || 'Unknown'} (${bleDevice.id})`, 'info');
 
                 await connectToDevice();
             } catch (error) {
-                log(`Scan cancelled or failed: ${error.message || error}`, 'warn');
-                alertUser('Scan cancelled.');
+                let errorMsg = error?.message || 'Unknown error';
+                
+                if (error?.name === 'NotFoundError') {
+                    errorMsg = 'No Suply Echo device found nearby. Make sure the device is powered on and within range.';
+                } else if (error?.name === 'NotAllowedError') {
+                    errorMsg = 'Bluetooth access denied. Please grant permission to access Bluetooth devices.';
+                } else if (error?.name === 'SecurityError') {
+                    errorMsg = 'Security error. Make sure you\'re using HTTPS or localhost.';
+                } else if (errorMsg.includes('cancelled')) {
+                    errorMsg = 'Device selection cancelled by user.';
+                }
+                
+                log(`Scan cancelled or failed: ${errorMsg}`, 'warn');
+                alertUser(errorMsg, true);
             } finally {
                 state.isScanning = false;
                 setButtonsState();
@@ -589,16 +800,23 @@
 
             try {
                 alertUser('Connecting to device...');
-                log('Connecting to GATT server...');
+                log('Connecting to GATT server...', 'info');
 
                 state.server = await state.device.gatt.connect();
                 dom.infoName.textContent = state.device.name || 'Unknown';
                 dom.infoStatus.textContent = 'Connected';
 
-                log('Connected. Discovering service...');
+                log('Connected. Waiting for services to initialize...', 'info');
+                await delay(1000); // Wait for services to settle
+
+                log('Discovering BT03 service...', 'info');
                 const service = await state.server.getPrimaryService(BLE_SERVICE_UUID);
+                log('✓ Found BT03 service', 'info');
+
+                log('Getting RX and TX characteristics...', 'info');
                 state.rxChar = await service.getCharacteristic(BLE_CHARACTERISTICS.RX);
                 state.txChar = await service.getCharacteristic(BLE_CHARACTERISTICS.TX);
+                log('✓ Got RX and TX characteristics', 'info');
 
                 state.isConnected = true;
                 dom.connectionStatus.textContent = 'Connected';
@@ -608,10 +826,19 @@
                 await queryDeviceInfo();
 
                 alertUser('Device connected. Ready to fetch data.');
-                log('Device ready. Use "Fetch Sensor Data" to download logs.');
+                log('Device ready. Use "Fetch Sensor Data" to download logs.', 'info');
             } catch (error) {
-                log(`Connection error: ${error.message || error}`, 'error');
-                alertUser('Failed to connect. Check console for details.', true);
+                let errorMsg = error?.message || 'Unknown error';
+                
+                if (error?.message?.includes('Service') || error?.message?.includes('service UUID')) {
+                    errorMsg = 'BT03 service not found. Make sure device is a BT03 logger.';
+                } else if (error?.message?.includes('Characteristic')) {
+                    errorMsg = 'BT03 characteristics not found. Check device compatibility.';
+                }
+                
+                log(`Connection error: ${errorMsg}`, 'error');
+                console.error('Connection error details:', error);
+                alertUser(`Failed to connect: ${errorMsg}`, true);
                 state.isConnected = false;
                 dom.infoStatus.textContent = 'Disconnected';
             } finally {
@@ -658,42 +885,137 @@
         }
 
         async function fetchSensorData() {
-            if (!state.rxChar || !state.txChar) return;
+            if (!state.device || !state.device.gatt?.connected) {
+                log('Device not connected', 'error');
+                alertUser('Device not connected', true);
+                return;
+            }
+
+            // Reconnect to service if needed
+            if (!state.rxChar || !state.txChar) {
+                try {
+                    log('Reconnecting to BT03 service...', 'info');
+                    const service = await state.server.getPrimaryService(BLE_SERVICE_UUID);
+                    state.rxChar = await service.getCharacteristic(BLE_CHARACTERISTICS.RX);
+                    state.txChar = await service.getCharacteristic(BLE_CHARACTERISTICS.TX);
+                    log('✓ Reconnected to service', 'info');
+                } catch (error) {
+                    log(`Failed to reconnect to service: ${error.message}`, 'error');
+                    alertUser('Failed to reconnect to device service', true);
+                    return;
+                }
+            }
 
             try {
                 state.isFetching = true;
                 setButtonsState();
                 alertUser('Fetching sensor data from device...');
-                log('Starting sensor data download...');
+                log('Starting sensor data download...', 'info');
 
                 state.rawPackets = [];
                 state.readings = [];
                 state.seenTimestamps.clear();
                 state.sensorType = 0x01;
 
+                log('Enabling notifications...', 'info');
                 await state.txChar.startNotifications();
+                log('✓ Notifications enabled', 'info');
 
                 const packets = [];
-                state.txChar.addEventListener('characteristicvaluechanged', event => {
-                    packets.push(event.target.value);
-                });
+                let isReceiving = false;
+                let totalRecords = 0;
 
+                const handleDataNotification = (event) => {
+                    const packet = event.target.value;
+                    
+                    if (packet.byteLength < 3) return;
+
+                    const firstByte = packet.getUint8(0);
+                    if (firstByte === 0x26) {
+                        // Command response - handle sensor type query
+                        const cmd1 = packet.getUint8(1);
+                        const cmd2 = packet.getUint8(2);
+                        if (cmd1 === 0x6C && cmd2 === 0x04 && packet.byteLength >= 6) {
+                            state.sensorType = packet.getUint8(4);
+                            log(`Sensor type: ${state.sensorType === 0x01 ? 'Temperature only' : 'Temperature + Humidity'}`, 'info');
+                        }
+                        return;
+                    }
+
+                    const packageLength = packet.getUint16(0, true);
+                    const packetType = packet.getUint8(2);
+
+                    if (packetType === 0x00) {
+                        // Start packet
+                        totalRecords = packet.getUint32(3, true);
+                        log(`📊 Start: ${totalRecords} records incoming`, 'info');
+                        isReceiving = true;
+                        packets.length = 0;
+                    } else if (packetType === 0xFF) {
+                        // Stop packet
+                        const uploadedCount = packet.getUint32(3, true);
+                        log(`✓ Reception complete: ${uploadedCount} records`, 'info');
+                        isReceiving = false;
+                        parseDataPackets(packets);
+                    } else if (isReceiving) {
+                        // Data packet
+                        packets.push(packet);
+                        if (packets.length % 10 === 0) {
+                            log(`📥 Received ${packets.length} packets...`, 'info');
+                        }
+                    }
+                };
+
+                state.txChar.addEventListener('characteristicvaluechanged', handleDataNotification);
+
+                log('Querying stored data type...', 'info');
                 await state.rxChar.writeValue(BT03_COMMANDS.QUERY_DATA_TYPE);
-                await delay(300);
-                await state.rxChar.writeValue(BT03_COMMANDS.EXTRACT_ALL_DATA);
                 await delay(500);
-                await state.rxChar.writeValue(BT03_COMMANDS.START_DATA_TRANSMISSION);
 
-                await delay(8000);
+                log('Requesting stored data...', 'info');
+                await state.rxChar.writeValue(BT03_COMMANDS.EXTRACT_ALL_DATA);
+                await delay(1000);
+
+                log('Starting data transmission...', 'info');
+                await state.rxChar.writeValue(BT03_COMMANDS.START_DATA_TRANSMISSION);
+                await delay(1000);
+
+                // Wait for data reception (max 30 seconds)
+                let waitTime = 0;
+                const maxWaitTime = 30000;
+                while (waitTime < maxWaitTime) {
+                    await delay(500);
+                    waitTime += 500;
+
+                    if (!isReceiving && packets.length > 0) {
+                        log('✓ Data reception completed', 'info');
+                        break;
+                    }
+
+                    if (waitTime >= 5000 && !isReceiving && packets.length === 0) {
+                        log('⚠️ No data received from device', 'warn');
+                        alertUser('No data received. Device may have no stored records.', true);
+                        break;
+                    }
+                }
+
+                if (waitTime >= maxWaitTime && isReceiving) {
+                    log('⚠️ Timeout - parsing partial data', 'warn');
+                    if (packets.length > 0) {
+                        parseDataPackets(packets);
+                    }
+                }
 
                 state.rawPackets = packets.slice();
-                parseDataPackets(packets);
+                state.txChar.removeEventListener('characteristicvaluechanged', handleDataNotification);
+                await state.txChar.stopNotifications();
 
                 alertUser(`Fetched ${state.readings.length} readings from device.`);
-                log(`Fetched ${state.readings.length} readings.`);
+                log(`✅ Parsed ${state.readings.length} valid readings`, 'info');
             } catch (error) {
                 log(`Fetch error: ${error.message || error}`, 'error');
-                alertUser('Failed to fetch data.', true);
+                console.error('Fetch error details:', error);
+                alertUser(`Failed to fetch data: ${error.message || 'Unknown error'}`, true);
             } finally {
                 state.isFetching = false;
                 setButtonsState();
@@ -909,10 +1231,28 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
+            interceptConsole();
+            console.log('🔧 Mobile Debug Console Active');
+            
             ensureSecureContext();
             ensureBleSupport();
+            
+            // Check Bluetooth status
+            if ('bluetooth' in navigator) {
+                checkBluetoothStatus();
+            } else {
+                state.bluetoothEnabled = false;
+                state.checkingBluetooth = false;
+            }
+            
             setButtonsState();
             updateMetrics();
+            
+            // Setup check Bluetooth button
+            const checkBtn = document.getElementById('check-bluetooth-btn');
+            if (checkBtn) {
+                checkBtn.addEventListener('click', checkBluetoothStatus);
+            }
         });
     </script>
 </body>
