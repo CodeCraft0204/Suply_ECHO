@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Connectivity Portal</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a2e;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            background: #16213e;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        h1 { margin-bottom: 10px; font-size: 1.8rem; }
+        p { color: #a9a9c9; margin-bottom: 30px; line-height: 1.5; }
+
+        #action-area {
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 15px;
+            border-radius: 12px;
+            border: none;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.2s, opacity 0.2s;
+            color: white;
+            box-sizing: border-box;
+        }
+        .btn:active { transform: scale(0.98); }
+
+        .btn-ble {
+            background: linear-gradient(135deg, #2196F3, #21CBF3);
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+        }
+        .btn-play { background-color: #01875f; }
+        .btn-ios { background-color: #007aff; }
+        .btn-apk { background-color: #34495e; border: 1px solid #555; }
+        
+        .icon { margin-right: 10px; font-size: 1.2rem; }
+
+        #debug-log {
+            margin-top: 30px;
+            font-size: 0.75rem;
+            color: #666;
+            text-align: left;
+            background: #0f1526;
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 id="header-text">Checking Device...</h1>
+        <p id="sub-text">Analyzing your connection...</p>
+
+        <div id="action-area">
+            Loading...
+        </div>
+
+        <div id="debug-log">Log: Init...</div>
+    </div>
+
+    <script>
+        const LINKS = {
+            playStore: "https://play.google.com/store/apps",
+            appStore: "https://apps.apple.com/",
+            apk: "https://example.com/downloads/app.apk"
+        };
+
+        const domActionArea = document.getElementById('action-area');
+        const domHeader = document.getElementById('header-text');
+        const domSub = document.getElementById('sub-text');
+        const domLog = document.getElementById('debug-log');
+
+        function log(msg) {
+            domLog.innerHTML += `<br>> ${msg}`;
+        }
+
+        // --- IMPROVED DETECTION LOGIC ---
+        function detectEnvironment() {
+            const ua = navigator.userAgent;
+            let os = 'Unknown';
+            
+            // 1. Android Detection
+            if (/android/i.test(ua)) {
+                os = 'Android';
+            } 
+            // 2. iOS Detection (Enhanced for iPad Desktop Mode)
+            // Checks for "iPhone/iPad" OR "Macintosh with Touch Points"
+            else if (
+                /iPad|iPhone|iPod/.test(ua) || 
+                (/Macintosh/i.test(ua) && navigator.maxTouchPoints && navigator.maxTouchPoints > 1)
+            ) {
+                os = 'iOS';
+            }
+            // 3. Desktop Detection
+            else if (/Win/i.test(navigator.platform)) os = 'Windows';
+            else if (/Mac/i.test(navigator.platform)) os = 'Mac'; // Non-touch Macs
+            else if (/Linux/i.test(ua)) os = 'Linux';
+
+            // BLE Check
+            const isBleAvailable = 'bluetooth' in navigator; 
+            const isSecure = window.isSecureContext;
+
+            return { os, isBleAvailable, isSecure };
+        }
+
+        async function launchBleFinder() {
+            try {
+                domSub.textContent = "Check the browser popup to connect.";
+                const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+                domHeader.textContent = "Connected!";
+                domSub.textContent = `Paired with ${device.name}`;
+            } catch (error) {
+                domSub.textContent = "Connection cancelled.";
+            }
+        }
+
+        function createBtn(text, cls, link, icon, onClick) {
+            let btn;
+            if (link) {
+                btn = document.createElement('a');
+                btn.href = link;
+            } else {
+                btn = document.createElement('button');
+                btn.onclick = onClick;
+            }
+            btn.className = `btn ${cls}`;
+            btn.innerHTML = `<span class="icon">${icon}</span> ${text}`;
+            domActionArea.appendChild(btn);
+        }
+
+        function renderInterface() {
+            const env = detectEnvironment();
+            log(`OS: ${env.os}`);
+            log(`BLE: ${env.isBleAvailable}`);
+
+            domActionArea.innerHTML = ''; 
+
+            // 1. If BLE Works (And is Secure) -> Show BLE Button
+            if (env.isBleAvailable && env.isSecure) {
+                domHeader.textContent = "Connect via Browser";
+                domSub.textContent = "Your browser supports Bluetooth directly.";
+                createBtn("Scan for Devices", "btn-ble", null, "⚡", launchBleFinder);
+                return;
+            }
+
+            // 2. Fallbacks based on OS
+            if (env.os === 'Android') {
+                domHeader.textContent = "App Required";
+                domSub.textContent = "Bluetooth not supported in this browser.";
+                createBtn("Google Play", "btn-play", LINKS.playStore, "▶");
+                createBtn("Download APK", "btn-apk", LINKS.apk, "⬇");
+            } 
+            else if (env.os === 'iOS') {
+                domHeader.textContent = "App Required";
+                domSub.textContent = "iOS browsers don't support Web Bluetooth.";
+                createBtn("App Store", "btn-ios", LINKS.appStore, "");
+            } 
+            else if (env.os === 'Mac') {
+                // Macs can often run iPad apps now, or users might be confused.
+                // Better to offer the App Store link than a dead end.
+                domHeader.textContent = "App Required";
+                domSub.textContent = "Safari doesn't support WebBLE. Download the app.";
+                createBtn("Mac / iOS App Store", "btn-ios", LINKS.appStore, "");
+            }
+            else {
+                // 3. FAIL-SAFE: If OS is totally unknown (or Windows without BLE capability)
+                // Instead of saying "Not Supported", show ALL options.
+                domHeader.textContent = "Select Your Platform";
+                domSub.textContent = "We couldn't detect your device type. Please choose:";
+                
+                createBtn("App Store (iOS)", "btn-ios", LINKS.appStore, "");
+                createBtn("Google Play (Android)", "btn-play", LINKS.playStore, "▶");
+                log("Fallback: Unknown OS, showing all options.");
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', renderInterface);
+    </script>
+</body>
+</html>

@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echo | Contextual Intelligence Demo</title>
+    
+    <!-- FAVICON -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23FF0000%22/></svg>" type="image/svg+xml">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Black+Ops+One&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        stamp: ['"Black Ops One"', 'cursive']
+                    },
+                    colors: {
+                        brand: { dark: '#0B1120', card: '#1e293b', teal: '#2DD4BF', red: '#EF4444' }
+                    },
+                    animation: {
+                        'bounce-right': 'bounceRight 1s infinite',
+                        'bounce-down': 'bounceDown 1s infinite',
+                        'stamp-slam': 'stampSlam 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                    },
+                    keyframes: {
+                        bounceRight: {
+                            '0%, 100%': { transform: 'translateX(0)' },
+                            '50%': { transform: 'translateX(5px)' },
+                        },
+                        bounceDown: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(5px)' },
+                        },
+                        stampSlam: {
+                            '0%': { opacity: '0', transform: 'translate(-50%, -50%) scale(3) rotate(-15deg)' },
+                            '100%': { opacity: '0.8', transform: 'translate(-50%, -50%) scale(1) rotate(-15deg)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #0B1120; color: #cbd5e1; overflow: hidden; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        
+        /* PDF Paper Effect */
+        .pdf-sheet {
+            background-color: #ffffff;
+            background-image: linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            transition: filter 1s ease; /* Smooth transition to grayscale */
+        }
+
+        /* Timeline Line */
+        .timeline-connector {
+            position: absolute;
+            left: 27px;
+            top: 30px;
+            bottom: -20px;
+            width: 2px;
+            background: #334155;
+            z-index: 0;
+        }
+        .last-item .timeline-connector { display: none; }
+
+        /* Animation */
+        .fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- NEW EFFECTS FOR TRANSITION --- */
+        
+        /* The container holding the PDF during transition */
+        .deplete-mode {
+            pointer-events: none; /* User can't click anything while fading */
+            transition: opacity 4s ease-in-out;
+            opacity: 0;
+        }
+
+        /* The PDF itself inside the depleting container */
+        .deplete-mode .pdf-sheet {
+            filter: grayscale(100%) contrast(1.2) brightness(0.9);
+        }
+
+        /* The Stamp Style */
+        .stamp-box {
+            border: 8px solid #b91c1c;
+            color: #b91c1c;
+            padding: 1rem 2rem;
+            text-transform: uppercase;
+            font-family: 'Black Ops One', cursive; /* Stencil look */
+            border-radius: 10px;
+            text-align: center;
+            line-height: 1;
+            mix-blend-mode: multiply; /* Make it look like ink on paper */
+            box-shadow: 0 0 0 4px rgba(185, 28, 28, 0.2) inset;
+        }
+
+        /* --- AI ORB RING ANIMATION --- */
+        @keyframes aiPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.4);
+                border-color: rgba(45, 212, 191, 0.5);
+            }
+            70% {
+                box-shadow: 0 0 0 8px rgba(45, 212, 191, 0);
+                border-color: rgba(45, 212, 191, 0.9);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(45, 212, 191, 0);
+                border-color: rgba(45, 212, 191, 0.5);
+            }
+        }
+
+        .ai-orb-active {
+            animation: aiPulse 2s infinite;
+            background: rgba(45, 212, 191, 0.05); /* Very subtle teal tint */
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- ONBOARDING OVERLAY -->
+    <div id="onboarding-layer" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm transition-opacity duration-500 flex items-center justify-center">
+        <div class="bg-white text-slate-900 p-8 rounded-2xl max-w-lg text-center shadow-2xl border-4 border-brand-teal relative mx-4">
+            <div class="absolute -top-8 left-1/2 -translate-x-1/2 w-16 h-16 bg-brand-teal rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                <i class="fa-solid fa-ship text-2xl text-white"></i>
+            </div>
+            
+            <h2 class="text-2xl font-bold mt-6 mb-2">Example Shipment - Best Viewed on Desktop</h2>
+            <p class="text-slate-600 text-sm mb-6">
+                <strong>Scenario:</strong> Frozen Shrimp moving from <br>Paita (Peru) → Rodman (Panama) → Los Angeles (USA).
+            </p>
+            
+            <div class="text-left bg-slate-100 p-4 rounded-lg text-sm space-y-3 mb-6 border border-slate-200">
+                <div class="flex gap-3 items-start">
+                    <div class="w-6 h-6 rounded bg-slate-300 flex items-center justify-center shrink-0 mt-0.5"><i class="fa-regular fa-file-lines text-slate-600 text-xs"></i></div>
+                    <p><strong>Traditional View:</strong> Simulates the raw, confusing PDF data from a standard logger.</p>
+                </div>
+                <div class="flex gap-3 items-start">
+                    <div class="w-6 h-6 rounded bg-brand-teal flex items-center justify-center shrink-0 mt-0.5"><i class="fa-solid fa-bolt text-white text-xs"></i></div>
+                    <p><strong>Echo View:</strong> Combines Vessel & Container tracking + condition data to prove root cause.</p>
+                </div>
+            </div>
+
+            <button onclick="dismissOnboarding()" class="bg-brand-dark text-white px-8 py-3 rounded-full font-bold hover:bg-slate-800 transition shadow-lg">
+                Start Interactive Demo
+            </button>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="h-16 bg-[#0B1120] border-b border-slate-800 flex items-center justify-between px-6 z-40 shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-xl font-extrabold text-white tracking-tight">
+                <span class="font-black">ECHO</span><span class="font-black text-red-500">.</span>
+            </span>
+        </div>
+        <div class="flex gap-4">
+            <a href="https://shipecho.ai" class="text-xs font-bold text-slate-500 hover:text-white uppercase tracking-wider py-2">
+                Exit Demo
+            </a>
+        </div>
+    </header>
+
+    <!-- APP CONTAINER -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-80 bg-[#0f172a] border-r border-slate-800 flex flex-col z-30 shrink-0 relative">
+            <div class="p-6 space-y-8">
+                
+                <!-- Shipment Info -->
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Active Shipment</label>
+                    <div class="bg-[#1e293b] p-4 rounded-lg border border-slate-700 shadow-sm">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="w-8 h-8 rounded bg-blue-500/10 flex items-center justify-center text-blue-400">
+                                <i class="fa-solid fa-shrimp"></i>
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold text-white">Frozen Shrimp</div>
+                                <div class="text-xs text-slate-400">Reefer 40' HC</div>
+                            </div>
+                        </div>
+                        <div class="h-px bg-slate-700 my-2"></div>
+                        <div class="flex justify-between text-xs text-slate-400">
+                            <span>Paita, PE</span>
+                            <i class="fa-solid fa-arrow-right text-slate-600"></i>
+                            <span>Los Angeles, US</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toggles -->
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Data Perspective</label>
+                    <div class="space-y-4 relative">
+                        
+                        <!-- Traditional Button -->
+                        <button onclick="setView('traditional')" id="btn-trad" class="w-full text-left p-4 rounded-xl border border-slate-700 hover:bg-slate-800 transition group relative overflow-hidden">
+                            <div class="flex items-center gap-3 relative z-10">
+                                <i id="icon-trad" class="fa-regular fa-file-pdf text-lg text-slate-500 transition"></i>
+                                <div>
+                                    <div id="text-trad" class="font-bold text-sm text-slate-400 transition">Traditional Logger</div>
+                                    <div class="text-[10px] text-slate-500">Raw, siloed data</div>
+                                </div>
+                            </div>
+                        </button>
+
+                        <!-- Echo Button -->
+                        <button onclick="triggerEchoTransition()" id="btn-echo" class="w-full text-left p-4 rounded-xl border border-slate-700 transition relative overflow-hidden">
+                            <div class="flex items-center gap-3 relative z-10">
+                                <i id="icon-echo" class="fa-solid fa-bolt text-lg text-slate-600"></i>
+                                <div>
+                                    <div id="text-echo" class="font-bold text-sm text-slate-500">ECHO.</div>
+                                    <div class="text-[10px] text-slate-400">Context & Root Cause</div>
+                                </div>
+                            </div>
+                            <!-- Active Indicator -->
+                            <div id="indicator-echo" class="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-brand-teal rounded-full animate-pulse hidden"></div>
+                        </button>
+
+                        <!-- ECHO BUTTON TOOLTIP -->
+                        <div id="echo-tooltip" class="absolute left-full top-[95px] ml-4 w-64 z-50 hidden opacity-0 transition-opacity duration-500">
+                            <div class="bg-brand-teal text-brand-dark p-3 rounded-lg shadow-2xl relative animate-bounce-right">
+                                <div class="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-4 bg-brand-teal rotate-45"></div>
+                                <div class="relative z-10 font-bold text-sm">
+                                    Click here to see ECHO Intelligence
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-auto p-6 border-t border-slate-800">
+                <div class="text-[10px] text-slate-600 text-center">
+                    Session ID: DEMO-8821-X
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN VIEWPORT -->
+        <main class="flex-1 relative bg-slate-950 overflow-hidden flex flex-col">
+
+            <!-- 1. TRADITIONAL VIEW (DEFAULT ON LOAD) -->
+            <div id="view-traditional" class="absolute inset-0 p-10 overflow-y-auto bg-slate-200 flex justify-center z-10 transition-colors duration-1000">
+                
+                <!-- STAMP OVERLAY (Hidden by default) -->
+                <div id="evidence-stamp" class="fixed top-1/2 left-1/2 md:left-[60%] -translate-x-1/2 -translate-y-1/2 z-50 hidden">
+                    <div class="stamp-box opacity-0">
+                        <div class="text-4xl font-bold">--REJECTED--</div>
+                        <div class="text-4xl font-bold">INSUFFICIENT</div>
+                        <div class="text-2xl">EVIDENCE</div>
+                    </div>
+                </div>
+
+                <div class="w-full max-w-4xl bg-white text-slate-900 pdf-sheet min-h-[1000px] p-12 font-mono">
+                    
+                    <div class="flex justify-between border-b-2 border-black pb-4 mb-8">
+                        <h1 class="text-3xl font-bold">TEMPERATURE RECORD</h1>
+                        <div class="text-right text-xs">
+                            <div>S/N: 9928102</div>
+                            <div>DOWNLOAD: MANUAL_USB</div>
+                        </div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="grid grid-cols-4 gap-4 mb-8 text-xs">
+                        <div class="border p-2"><span class="block text-slate-500">Start</span>31 OCT 09:30</div>
+                        <div class="border p-2"><span class="block text-slate-500">End</span>25 NOV 23:30</div>
+                        <div class="border p-2"><span class="block text-slate-500">Min</span>-22.1°C</div>
+                        <div class="border p-2 bg-red-100 font-bold text-red-600"><span class="block text-slate-500 font-normal">Max</span>-9.5°C</div>
+                    </div>
+
+                    <!-- GRAPHICAL VIEW -->
+                    <div class="mb-8 relative pl-10 pb-8">
+                        <div class="text-xs font-bold mb-4">GRAPHICAL VIEW</div>
+                        
+                        <!-- Y-Axis Label -->
+                        <div class="absolute -left-2 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-slate-500 font-bold tracking-wider">TEMP (°C)</div>
+                        
+                        <!-- Graph Container -->
+                        <div class="h-64 border-l border-b border-black relative bg-slate-50" id="trad-graph">
+                            <!-- Horizontal Grid Lines & Labels -->
+                            <div class="absolute top-[20%] w-full h-px bg-slate-300 left-0"></div>
+                            <div class="absolute top-[18%] -left-8 text-[9px] text-slate-400">-5°C</div>
+
+                            <div class="absolute top-[40%] w-full h-px bg-slate-300 left-0"></div>
+                            <div class="absolute top-[38%] -left-8 text-[9px] text-slate-400">-10°C</div>
+
+                            <div class="absolute top-[60%] w-full h-px bg-slate-300 left-0"></div>
+                            <div class="absolute top-[58%] -left-8 text-[9px] text-slate-400">-15°C</div>
+
+                            <div class="absolute top-[80%] w-full h-px bg-slate-300 left-0"></div>
+                            <div class="absolute top-[78%] -left-8 text-[9px] text-slate-400">-20°C</div>
+                            
+                            <!-- Bars Injected via JS -->
+                            <div id="trad-bars" class="w-full h-full flex items-end px-1 gap-px"></div>
+                        </div>
+
+                        <!-- X-Axis Labels -->
+                        <div class="flex justify-between mt-2 text-[9px] text-slate-500 font-mono">
+                            <span>31 OCT</span>
+                            <span>05 NOV</span>
+                            <span>10 NOV</span>
+                            <span>15 NOV</span>
+                            <span>20 NOV</span>
+                            <span>25 NOV</span>
+                        </div>
+                        <div class="text-center text-[10px] text-slate-500 mt-2 font-bold">DATE / TIME (UTC)</div>
+                    </div>
+
+                    <!-- Alarm List -->
+                    <div class="border-t-2 border-black pt-4">
+                        <div class="text-xs font-bold mb-2 text-red-600">ALARM LIST</div>
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-100"><tr><th class="p-2">#</th><th>Time</th><th>Type</th><th>Val</th></tr></thead>
+                            <tbody>
+                                <tr><td class="p-2">1</td><td>14 NOV 13:50</td><td class="text-red-600 font-bold">HIGH TEMP</td><td>-15.0°C</td></tr>
+                                <tr><td class="p-2">2</td><td>14 NOV 16:20</td><td class="text-red-600 font-bold">HIGH TEMP</td><td>-9.5°C</td></tr>
+                                <tr><td class="p-2">3</td><td>14 NOV 18:00</td><td class="text-red-600 font-bold">HIGH TEMP</td><td>-12.0°C</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="mt-4 p-4 bg-yellow-50 text-yellow-800 text-xs italic">
+                            Note: A deviation has been detected. This log contains no verified location data. All events must be cross-checked against the carrier’s official records. The integrity of this file cannot be confirmed, and it may have been altered before reaching you.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. ECHO VIEW (HIDDEN ON LOAD) -->
+            <div id="view-echo" class="absolute inset-0 flex flex-col bg-[#0B1120] z-20 hidden">
+                
+                <!-- HEADER -->
+                <div class="h-20 bg-[#162032] border-b border-slate-800 px-8 flex items-center justify-between shrink-0 relative">
+                    <div class="flex gap-8">
+                        <!-- Vessel Chain -->
+                        <div>
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Vessel Chain</div>
+                            <div class="text-white font-bold text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-ship text-brand-teal"></i>
+                                ECO MARIN <i class="fa-solid fa-arrow-right text-slate-600 text-xs"></i> NYK ROMULUS
+                            </div>
+                        </div>
+                        <!-- Container -->
+                        <div>
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Container</div>
+                            <div class="text-white font-mono text-sm font-bold">MSCU-99281</div>
+                        </div>
+                        <!-- BOL -->
+                        <div>
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">BOL Number</div>
+                            <div class="text-white font-mono text-sm font-bold">MEDU210982</div>
+                        </div>
+                        <!-- PO -->
+                        <div>
+                            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">PO Number</div>
+                            <div class="text-white font-mono text-sm font-bold">PO-4492-Walmart</div>
+                        </div>
+                    </div>
+                    
+                    <div class="relative">
+                        <a href="https://shipecho.ai/demoreport.html" target="_blank" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2 shadow-lg">
+                            <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Generate AI Report
+                        </a>
+
+                        <!-- AI REPORT TOOLTIP -->
+                        <div id="ai-report-tooltip" class="absolute right-0 top-14 w-64 z-50 hidden opacity-0 transition-opacity duration-500">
+                            <div class="bg-[#2dd4bf] text-black text-xs p-3 rounded-lg shadow-2xl relative border border-[#1cae98] animate-bounce-down">
+                                <div class="absolute -top-1 right-8 w-3 h-3 bg-[#2dd4bf] border-t border-l border-[#1cae98] rotate-45"></div>
+                                <div class="relative z-10 font-medium leading-tight">
+                                    View an example report that is automatically generated on the scan of an echo device.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SPLIT CONTENT -->
+                <div class="flex-1 flex overflow-hidden">
+                    
+                    <!-- LEFT: TIMELINE -->
+                    <div class="w-2/3 p-8 overflow-y-auto custom-scroll relative">
+                        <div class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 sticky top-0 bg-[#0B1120] py-2 z-10 flex items-center gap-2">
+                            <i class="fa-solid fa-timeline text-brand-teal"></i> Journey Milestones
+                        </div>
+                        
+                        <div id="echo-timeline-container" class="relative space-y-0 pb-12 pl-2">
+                            <!-- JS will inject data here -->
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: INSIGHTS -->
+                    <div class="w-1/3 bg-[#162032] border-l border-slate-800 p-8 flex flex-col overflow-y-auto">
+                        
+                        <div class="mb-8">
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-magnifying-glass-chart"></i> Root Cause Analysis
+                            </div>
+                            
+                            <!-- Insight Card -->
+                            <div class="bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-6 shadow-lg relative overflow-hidden">
+                                <!-- Glow Effect -->
+                                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-transparent"></div>
+                                
+                                <div class="flex items-center gap-2 mb-3">
+                                    <i class="fa-solid fa-triangle-exclamation text-red-500"></i>
+                                    <span class="text-red-400 text-xs font-bold uppercase">Critical Deviation</span>
+                                </div>
+                                
+                                <h3 class="text-white font-bold text-lg mb-3">Potential Power Disconnect  (95% Probability)</h3>
+                                <p class="text-sm text-slate-300 leading-relaxed mb-4">
+                                    Temperature rose to -2.5°C. Pattern is consistent with a power-off event during yard dwell at transshipment.
+                                </p>
+                                
+                                <div class="bg-black/30 rounded p-3 border border-white/5 space-y-2">
+                                    <div class="flex justify-between">
+                                        <span class="text-xs text-slate-400">Location Identified:</span>
+                                        <span class="text-xs font-bold text-white">Rodman (PPIT)</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-xs text-slate-400">Duration:</span>
+                                        <span class="text-xs font-bold text-red-400">18h 20m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-8">
+                            <div class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Potential Impact on Frozen Shrimp Quality</div>
+                            <div class="bg-[#0B1120] p-5 rounded-xl border border-slate-700">
+                                <div class="flex justify-between text-sm mb-2">
+                                    <span class="text-slate-400">Excessive drip loss</span>
+                                    <span class="text-red-500 font-bold">Partial thaw + refreeze damage</span>
+                                </div>
+                                <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
+                                    <div class="bg-brand-teal h-full w-[85%]"></div>
+                                </div>
+                                <div class="mt-2 text-right text-[10px] text-slate-500">Impact probability 95% Remaining</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // 1. THE DATA (Paita -> Rodman -> LA)
+        const TIMELINE_DATA = [
+            { date: "31 Oct", time: "09:30", loc: "Paita, PE", event: "Gate out empty", temp: "Amb", status: "neutral", icon: "fa-truck" },
+            { date: "01 Nov", time: "14:15", loc: "Paita, PE", event: "Gate in full", temp: "-22.0°", status: "good", icon: "fa-warehouse" },
+            { date: "05 Nov", time: "08:00", loc: "Paita, PE", event: "Loaded on ECO MARIN", temp: "-22.1°", status: "good", icon: "fa-anchor" },
+            { date: "05 Nov", time: "22:45", loc: "Paita, PE", event: "Departed Paita", temp: "-22.0°", status: "good", icon: "fa-ship" },
+            { date: "09 Nov", time: "06:30", loc: "Rodman, PA", event: "Arrived Rodman", temp: "-21.8°", status: "good", icon: "fa-anchor" },
+            { date: "10 Nov", time: "11:20", loc: "Rodman, PA", event: "Discharged", temp: "-21.5°", status: "good", icon: "fa-dolly" },
+            // THE ISSUE
+            { 
+                date: "14 Nov", time: "13:40", loc: "Rodman, PA", 
+                event: "Power Disconnect (Yard)", 
+                temp: "-2.5°", status: "issue", icon: "fa-plug-circle-xmark", 
+                note: "Duration 18h 20m"
+            },
+            { date: "16 Nov", time: "09:15", loc: "Rodman, PA", event: "Loaded on NYK ROMULUS", temp: "-18.2°", status: "good", icon: "fa-anchor" },
+            { date: "17 Nov", time: "04:00", loc: "Rodman, PA", event: "Departed Rodman", temp: "-20.0°", status: "good", icon: "fa-ship" },
+            { date: "25 Nov", time: "16:45", loc: "Los Angeles, US", event: "Arrived LA", temp: "-20.1°", status: "good", icon: "fa-anchor" },
+            { date: "25 Nov", time: "20:10", loc: "Los Angeles, US", event: "Discharged", temp: "-20.1°", status: "good", icon: "fa-dolly" },
+            { date: "25 Nov", time: "23:30", loc: "Los Angeles, US", event: "Gate out full", temp: "-20.2°", status: "good", icon: "fa-truck" }
+        ];
+
+        // 2. RENDER ECHO TIMELINE
+        function renderEcho() {
+            const container = document.getElementById('echo-timeline-container');
+            container.innerHTML = ''; 
+            let html = '';
+
+            TIMELINE_DATA.forEach((item, i) => {
+                let colorClass = 'bg-slate-800 border-slate-600 text-slate-500';
+                let tempClass = 'text-slate-500';
+                let rowBg = 'hover:bg-slate-800/50';
+                
+                if (item.status === 'good') {
+                    colorClass = 'bg-[#0B1120] border-brand-teal text-brand-teal shadow-[0_0_10px_rgba(45,212,191,0.3)]';
+                    tempClass = 'text-brand-teal font-bold';
+                }
+                if (item.status === 'issue') {
+                    colorClass = 'bg-red-500 border-red-500 text-white animate-pulse';
+                    tempClass = 'text-red-500 font-bold';
+                    rowBg = 'bg-red-500/10 border border-red-500/30';
+                }
+
+                const isLast = i === TIMELINE_DATA.length - 1 ? 'last-item' : '';
+                const delay = i * 50; 
+
+                html += `
+                <div class="relative pl-16 py-2 ${isLast} fade-in-up" style="animation-delay: ${delay}ms; opacity: 0;">
+                    <!-- Connector Line -->
+                    <div class="timeline-connector"></div>
+
+                    <!-- Icon Bubble -->
+                    <div class="absolute left-3 top-4 w-10 h-10 rounded-full border-2 ${colorClass} flex items-center justify-center z-10 bg-[#0B1120]">
+                        <i class="fa-solid ${item.icon} text-xs"></i>
+                    </div>
+
+                    <!-- Content Card -->
+                    <div class="bg-[#162032] p-3 rounded-lg border border-slate-700/50 ${rowBg} transition flex justify-between items-center">
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">${item.loc}</div>
+                            <div class="text-white font-bold text-sm">${item.event}</div>
+                            ${item.note ? `<div class="text-[10px] font-bold text-red-400 mt-1 uppercase">${item.note}</div>` : ''}
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-slate-400 font-mono">${item.date}</div>
+                            <div class="${tempClass} text-sm mt-1">${item.temp}</div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // 3. RENDER TRADITIONAL GRAPH
+        function renderTradGraph() {
+            const graph = document.getElementById('trad-bars');
+            if(graph.innerHTML.trim() !== "") return; 
+
+            let bars = '';
+            for(let i=0; i<80; i++) {
+                let h = 18 + Math.random()*8; // Base -22ish
+                let color = '#94a3b8'; 
+                // Spike 
+                if(i > 40 && i < 46) { h = 60 + Math.random()*10; color = '#dc2626'; }
+                bars += `<div style="height:${h}%; width:1.2%; background:${color}; opacity:0.8; z-index: 10;"></div>`;
+            }
+            graph.innerHTML = bars;
+        }
+
+        // --- NEW TRANSITION LOGIC ---
+        function triggerEchoTransition() {
+            const viewTrad = document.getElementById('view-traditional');
+            
+            // If already hidden (user is already on Echo), do nothing or standard switch
+            if (viewTrad.classList.contains('hidden')) {
+                setView('echo');
+                return;
+            }
+
+            // 1. Lock UI
+            const btnEcho = document.getElementById('btn-echo');
+            btnEcho.classList.add('pointer-events-none'); // Prevent double click
+            btnEcho.classList.remove('ai-orb-active'); // Stop pulsing when clicked
+            
+            // 2. Start Depletion Effect (Grayscale + Fade out)
+            viewTrad.classList.add('deplete-mode');
+            
+            // 3. Slam the Stamp after slight delay (0.8s)
+            setTimeout(() => {
+                const stamp = document.getElementById('evidence-stamp');
+                const stampInner = stamp.querySelector('.stamp-box');
+                stamp.classList.remove('hidden');
+                stampInner.classList.add('animate-stamp-slam');
+            }, 800);
+
+            // 4. Wait for fade to finish (approx 4.5s total), then switch
+            setTimeout(() => {
+                setView('echo');
+                // Cleanup Styles in case user switches back
+                viewTrad.classList.remove('deplete-mode');
+                document.getElementById('evidence-stamp').classList.add('hidden');
+                btnEcho.classList.remove('pointer-events-none');
+            }, 4500);
+        }
+
+        // 4. TOGGLE VIEW LOGIC (UPDATED FOR ORB & VISIBILITY)
+        function setView(view) {
+            const trad = document.getElementById('view-traditional');
+            const echo = document.getElementById('view-echo');
+            
+            // Button Elements
+            const btnTrad = document.getElementById('btn-trad');
+            const btnEcho = document.getElementById('btn-echo');
+            
+            // Inner Elements
+            const textTrad = document.getElementById('text-trad');
+            const iconTrad = document.getElementById('icon-trad');
+            const textEcho = document.getElementById('text-echo');
+            const iconEcho = document.getElementById('icon-echo');
+            const indicatorEcho = document.getElementById('indicator-echo');
+            
+            // Tooltips
+            const echoTooltip = document.getElementById('echo-tooltip');
+            const aiTooltip = document.getElementById('ai-report-tooltip');
+
+            if(view === 'traditional') {
+                trad.classList.remove('hidden');
+                echo.classList.add('hidden');
+                renderTradGraph();
+                
+                trad.style.opacity = '1';
+
+                // Activate Trad Button
+                btnTrad.className = "w-full text-left p-4 rounded-xl border border-white bg-white shadow-lg transition group relative overflow-hidden";
+                textTrad.className = "font-bold text-sm text-slate-900"; 
+                iconTrad.className = "fa-regular fa-file-pdf text-lg text-slate-700"; 
+
+                // Deactivate Echo Button -> BUT MAKE IT VISIBLE & PULSING
+                btnEcho.className = "w-full text-left p-4 rounded-xl border border-slate-700 hover:bg-slate-800 transition relative overflow-hidden ai-orb-active";
+                btnEcho.setAttribute('onclick', 'triggerEchoTransition()');
+                
+                // Brighter Text for visibility
+                textEcho.className = "font-bold text-sm text-slate-300"; 
+                iconEcho.className = "fa-solid fa-bolt text-lg text-teal-400"; // Light teal glow icon
+                indicatorEcho.classList.add('hidden'); 
+                
+                if(aiTooltip) aiTooltip.classList.add('hidden');
+
+            } else {
+                trad.classList.add('hidden');
+                echo.classList.remove('hidden');
+                renderEcho();
+
+                // Deactivate Trad Button
+                btnTrad.className = "w-full text-left p-4 rounded-xl border border-slate-700 hover:bg-slate-800 transition group relative overflow-hidden opacity-60";
+                textTrad.className = "font-bold text-sm text-slate-500"; 
+                iconTrad.className = "fa-regular fa-file-pdf text-lg text-slate-600"; 
+
+                // Activate Echo Button (Solid Teal State)
+                btnEcho.className = "w-full text-left p-4 rounded-xl border border-brand-teal bg-brand-teal/10 relative overflow-hidden shadow-[0_0_20px_rgba(45,212,191,0.1)] transition";
+                btnEcho.setAttribute('onclick', "setView('echo')");
+                
+                textEcho.className = "font-bold text-sm text-brand-teal"; 
+                iconEcho.className = "fa-solid fa-bolt text-lg text-brand-teal"; 
+                indicatorEcho.classList.remove('hidden'); 
+
+                if(echoTooltip) echoTooltip.classList.add('hidden');
+                
+                if(aiTooltip) {
+                    aiTooltip.classList.remove('hidden');
+                    setTimeout(() => aiTooltip.classList.remove('opacity-0'), 600);
+                    setTimeout(() => aiTooltip.classList.add('opacity-0'), 30000);
+                }
+            }
+        }
+
+        function dismissOnboarding() {
+            const overlay = document.getElementById('onboarding-layer');
+            const tooltip = document.getElementById('echo-tooltip');
+            
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                if(tooltip) {
+                    tooltip.classList.remove('hidden');
+                    setTimeout(() => tooltip.classList.remove('opacity-0'), 200);
+                }
+            }, 500);
+        }
+
+        window.onload = function() {
+            // Default to Traditional on load
+            setView('traditional');
+        }
+    </script>
+</body>
+</html>
