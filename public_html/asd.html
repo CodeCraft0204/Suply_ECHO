@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Echo | Contextual Intelligence</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: { bg: '#050505', surface: '#121212', accent: '#3b82f6', cyan: '#06b6d4' },
+                    animation: {
+                        'breathe': 'breathe 4s ease-in-out infinite',
+                        'slide-up': 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    },
+                    keyframes: {
+                        breathe: {
+                            '0%, 100%': { transform: 'scale(1)', opacity: '0.5' },
+                            '50%': { transform: 'scale(1.05)', opacity: '0.8' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: 0, transform: 'translateY(15px)' },
+                            '100%': { opacity: 1, transform: 'translateY(0)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { 
+            background-color: #050505; 
+            color: white; 
+            -webkit-tap-highlight-color: transparent; 
+            overflow: hidden; 
+            height: 100dvh; 
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .orb {
+            width: 180px; 
+            height: 180px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #1e293b 0%, #000000 70%);
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.1);
+        }
+        .orb.active {
+            border-color: #06b6d4;
+            box-shadow: 0 0 60px rgba(6, 182, 212, 0.3);
+            transform: scale(0.95);
+        }
+
+        .progress-ring circle {
+            transition: stroke-dashoffset 0.1s linear;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        .action-card {
+            background: #121212;
+            border: 1px solid #27272a;
+            transition: all 0.2s;
+        }
+        .action-card:active { transform: scale(0.96); background: #18181b; }
+
+        .hero-card {
+            background: linear-gradient(145deg, #121212 0%, #0c1220 100%);
+            border: 1px solid #1e293b;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        .hero-card:active { transform: scale(0.98); }
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 4px; height: 100%;
+            background: #06b6d4;
+        }
+
+        .scroll-content {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="font-sans">
+
+    <!-- Header (Fixed Top) -->
+    <header class="h-14 px-6 flex justify-between items-center z-50 shrink-0">
+        <div class="flex items-center gap-2">
+            <span class="w-1.5 h-4 bg-cyan-500 rounded-sm"></span>
+            <span class="font-bold tracking-widest text-sm text-slate-300">ECHO</span>
+        </div>
+        <div id="status-dot" class="w-2 h-2 rounded-full bg-slate-700"></div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 relative w-full h-full">
+
+        <!-- VIEW 0: LANGUAGE SELECT -->
+        <div id="view-language" class="absolute inset-0 flex flex-col items-center justify-center w-full z-40 p-6 bg-[#050505]">
+            <h1 class="text-xl font-medium text-white mb-8 tracking-tight">Select Language</h1>
+            
+            <div class="grid grid-cols-1 gap-4 w-full max-w-xs">
+                <button onclick="selectLanguage('en')" class="action-card w-full p-4 rounded-xl flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">🇺🇸</span>
+                        <span class="font-bold text-sm text-slate-300">English</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-600 text-xs"></i>
+                </button>
+
+                <button onclick="selectLanguage('es')" class="action-card w-full p-4 rounded-xl flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">🇪🇸</span>
+                        <span class="font-bold text-sm text-slate-300">Español</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-600 text-xs"></i>
+                </button>
+
+                <button onclick="selectLanguage('zh')" class="action-card w-full p-4 rounded-xl flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">🇨🇳</span>
+                        <span class="font-bold text-sm text-slate-300">中文</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-600 text-xs"></i>
+                </button>
+
+                <button onclick="selectLanguage('ja')" class="action-card w-full p-4 rounded-xl flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg">🇯🇵</span>
+                        <span class="font-bold text-sm text-slate-300">日本語</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-600 text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 1: CONNECT & SYNC -->
+        <div id="view-main" class="absolute inset-0 flex flex-col items-center justify-center w-full transition-all duration-500 p-6 opacity-0 pointer-events-none">
+            
+            <div class="relative mb-8" onclick="handleTap()">
+                <svg class="absolute inset-0 w-[180px] h-[180px] -rotate-90 pointer-events-none opacity-0 transition-opacity duration-300" id="progress-container">
+                    <circle cx="90" cy="90" r="88" stroke="#1e293b" stroke-width="2" fill="transparent"/>
+                    <circle id="progress-ring" cx="90" cy="90" r="88" stroke="#06b6d4" stroke-width="2" fill="transparent" stroke-dasharray="553" stroke-dashoffset="553" stroke-linecap="round"/>
+                </svg>
+
+                <div id="orb" class="orb group cursor-pointer">
+                    <i id="icon-main" class="fa-brands fa-bluetooth-b text-4xl text-slate-400 group-hover:text-white transition-colors duration-300"></i>
+                    <div id="orb-glow" class="absolute inset-0 rounded-full bg-blue-500/10 animate-breathe pointer-events-none opacity-0 transition-opacity duration-500"></div>
+                </div>
+            </div>
+
+            <div class="text-center h-14">
+                <h1 id="txt-main" class="text-2xl font-medium text-white tracking-tight">Tap to Connect</h1>
+                <p id="txt-sub" class="text-slate-500 text-sm mt-1 font-mono opacity-60">50m Range</p>
+            </div>
+        </div>
+
+        <!-- VIEW 2: FINAL RESULT -->
+        <div id="view-result" class="absolute inset-0 flex flex-col p-6 bg-[#050505] opacity-0 pointer-events-none transition-opacity duration-500">
+            <div class="flex-1 flex flex-col justify-evenly w-full max-w-sm mx-auto">
+                
+                <div class="text-center opacity-0 animate-slide-up" style="animation-delay: 0ms">
+                    <div class="w-14 h-14 rounded-full border-2 border-green-500/30 flex items-center justify-center mx-auto mb-3 text-green-400 shadow-[0_0_20px_rgba(74,222,128,0.1)]">
+                        <i class="fa-solid fa-check text-xl"></i>
+                    </div>
+                    <h2 data-key="dataSecured" class="text-xl font-bold text-white tracking-tight">Data Secured</h2>
+                    <p id="device-id-display" class="text-slate-500 text-xs font-mono mt-1">ID: --</p>
+                </div>
+
+                <div class="opacity-0 animate-slide-up" style="animation-delay: 100ms">
+                    <div class="bg-gradient-to-r from-blue-900/20 to-transparent border border-blue-500/20 rounded-lg p-3 flex gap-3 items-center">
+                        <div class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-cloud-arrow-up text-blue-400 text-xs"></i>
+                        </div>
+                        <div class="text-left">
+                            <p data-key="systemSync" class="text-xs text-blue-100 font-semibold">Synced to Cloud</p>
+                            <p data-key="shipperNotify" class="text-[10px] text-slate-400">Shipper notified of arrival.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="opacity-0 animate-slide-up" style="animation-delay: 200ms">
+                    <div data-key="rawData" class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2 ml-1">Raw Data</div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="fakeDownload('PDF')" class="action-card rounded-xl p-3 flex flex-col items-center justify-center gap-2 group h-20">
+                            <i class="fa-regular fa-file-pdf text-xl text-slate-400 group-hover:text-red-400 transition-colors"></i>
+                            <span data-key="pdfLog" class="text-[10px] font-bold text-slate-300">PDF Log</span>
+                        </button>
+                        <button onclick="fakeDownload('CSV')" class="action-card rounded-xl p-3 flex flex-col items-center justify-center gap-2 group h-20">
+                            <i class="fa-solid fa-file-csv text-xl text-slate-400 group-hover:text-green-400 transition-colors"></i>
+                            <span data-key="csvData" class="text-[10px] font-bold text-slate-300">CSV Data</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="opacity-0 animate-slide-up" style="animation-delay: 300ms">
+                    <div data-key="recommended" class="text-[10px] font-bold text-cyan-900 uppercase tracking-widest mb-2 ml-1">Recommended</div>
+                    <button onclick="showDashboard()" class="hero-card w-full p-4 rounded-xl flex items-center justify-between group">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span data-key="echoIntel" class="text-cyan-400 text-base font-bold">Echo Intelligence</span>
+                                <span data-key="newBadge" class="bg-cyan-500/10 text-cyan-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-cyan-500/20">NEW</span>
+                            </div>
+                            <div data-key="rootCause" class="text-slate-400 text-[10px] text-left">View Root Cause Analysis</div>
+                        </div>
+                        <div class="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition">
+                            <i class="fa-solid fa-chevron-right text-cyan-400 text-xs"></i>
+                        </div>
+                    </button>
+                </div>
+
+                <div class="text-center opacity-0 animate-slide-up" style="animation-delay: 400ms">
+                    <button onclick="reset()" data-key="disconnect" class="text-slate-700 text-xs py-2 hover:text-slate-500 transition">
+                        Disconnect Device
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- DASHBOARD VIEW -->
+    <div id="view-dashboard" class="absolute inset-0 bg-[#050505] z-50 transform translate-x-full transition-transform duration-500 flex flex-col h-full w-full">
+        
+        <div class="h-16 px-6 flex items-center justify-between border-b border-white/5 shrink-0">
+            <button onclick="hideDashboard()" class="text-slate-400 w-10 h-10 flex items-center justify-center rounded-full active:bg-white/5"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="text-xs font-bold text-cyan-500 tracking-widest">ECHO AI</span>
+            <div class="w-10"></div>
+        </div>
+        
+        <div class="flex-1 scroll-content hide-scroll p-6">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <div class="text-3xl font-bold text-white mb-1">C-</div>
+                    <div data-key="qualityScore" class="text-slate-500 text-[10px] font-mono uppercase tracking-widest">Quality Score</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-white font-bold">MSCU-99281</div>
+                    <div data-key="container" class="text-slate-500 text-[10px] font-mono uppercase tracking-widest">Container</div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-b from-slate-900 to-[#080808] border border-red-500/30 rounded-2xl p-5 mb-6 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+                <div class="flex gap-2 items-center mb-2">
+                    <i class="fa-solid fa-triangle-exclamation text-red-500 text-sm"></i>
+                    <span data-key="deviation" class="text-red-500 font-bold text-xs uppercase">Deviation Detected</span>
+                </div>
+                <h3 data-key="powerDisconnect" class="text-white font-bold text-base mb-1">Power Disconnect</h3>
+                <p data-key="analysisText" class="text-slate-400 text-xs leading-relaxed mb-3">
+                    Temperature rose to -9.5°C during 6h 20m yard dwell. Pattern matches transshipment power-off.
+                </p>
+                <div class="bg-black/40 rounded px-2 py-1.5 text-[10px] text-slate-300 inline-block border border-white/5">
+                    <i class="fa-solid fa-location-dot mr-1 text-slate-500"></i> Rodman, PA
+                </div>
+            </div>
+
+            <div class="border-t border-white/5 pt-4">
+                 <div data-key="timelineEvent" class="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-4">Timeline Event</div>
+                 <div class="flex gap-4">
+                     <div class="flex flex-col items-center">
+                         <div class="w-2 h-2 rounded-full bg-slate-600"></div>
+                         <div class="w-0.5 h-full bg-slate-800 my-1"></div>
+                     </div>
+                     <div class="pb-6">
+                         <div class="text-slate-500 text-xs font-mono">08:00</div>
+                         <div data-key="loaded" class="text-slate-300 text-sm">Loaded on Vessel</div>
+                     </div>
+                 </div>
+                 <div class="flex gap-4">
+                     <div class="flex flex-col items-center">
+                         <div class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_red]"></div>
+                     </div>
+                     <div>
+                         <div class="text-red-400 text-xs font-mono font-bold">13:40</div>
+                         <div data-key="powerLost" class="text-white text-sm font-bold">Power Lost (Yard)</div>
+                         <div class="text-slate-500 text-[10px]">Rodman Terminal</div>
+                     </div>
+                 </div>
+            </div>
+            
+            <div class="h-20"></div>
+        </div>
+        
+        <div class="p-6 border-t border-white/5 bg-[#050505] shrink-0 safe-area-bottom">
+            <button data-key="downloadReport" class="w-full bg-white text-black font-bold py-4 rounded-xl active:scale-95 transition" onclick="fakeDownload('Report')">
+                Download Claims Report
+            </button>
+        </div>
+    </div>
+
+    <!-- LOGIC -->
+    <script>
+        // ===== BLE CONSTANTS =====
+        const BLE_SERVICE_UUID = '6c400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const BLE_CHARACTERISTICS = {
+            RX: '6c400002-b5a3-f393-e0a9-e50e24dcca9e',
+            TX: '6c400003-b5a3-f393-e0a9-e50e24dcca9e',
+        };
+        const COMMON_BLE_SERVICES = [
+            '6c400001-b5a3-f393-e0a9-e50e24dcca9e',
+            '6c400002-b5a3-f393-e0a9-e50e24dcca9e',
+            '6c400003-b5a3-f393-e0a9-e50e24dcca9e',
+            '00001800-0000-1000-8000-00805f9b34fb',
+            '00001801-0000-1000-8000-00805f9b34fb',
+            '0000180a-0000-1000-8000-00805f9b34fb',
+            '0000180f-0000-1000-8000-00805f9b34fb',
+        ];
+        const BT03_COMMANDS = {
+            QUERY_ENCRYPTION: new Uint8Array([0x2A, 0x03, 0x72, 0x32, 0x23]),
+            READ_DEVICE_ID: new Uint8Array([0x2A, 0x03, 0x72, 0x41, 0x23]),
+            QUERY_DATA_TYPE: new Uint8Array([0x2A, 0x03, 0x6C, 0x04, 0x23]),
+            EXTRACT_ALL_DATA: new Uint8Array([0x2A, 0x0D, 0x6C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x23]),
+            START_DATA_TRANSMISSION: new Uint8Array([0x2A, 0x03, 0x6C, 0x01, 0x23]),
+        };
+
+        // ===== STATE =====
+        let bleDevice = null;
+        let bleServer = null;
+        let deviceId = '';
+        let temperatureData = [];
+        let rawDataPackets = [];
+        let sensorType = 0x02; // Default: temp + humidity
+
+        // ===== TRANSLATION DATA =====
+        const translations = {
+            en: {
+                tapConnect: "Tap to Connect",
+                range: "50m Range",
+                searching: "Searching...",
+                keepClose: "Keep device close",
+                deviceFound: "Device Found",
+                syncing: "Syncing...",
+                syncingData: "Syncing Data...",
+                dataSecured: "Data Secured",
+                systemSync: "Synced to Cloud",
+                shipperNotify: "Shipper notified of arrival.",
+                rawData: "Raw Data",
+                pdfLog: "PDF Log",
+                csvData: "CSV Data",
+                recommended: "Recommended",
+                echoIntel: "Echo Intelligence",
+                rootCause: "View Root Cause Analysis",
+                newBadge: "NEW",
+                disconnect: "Disconnect Device",
+                qualityScore: "Quality Score",
+                container: "Container",
+                deviation: "Deviation Detected",
+                powerDisconnect: "Power Disconnect",
+                analysisText: "Temperature rose to -9.5°C during 6h 20m yard dwell. Pattern matches transshipment power-off.",
+                timelineEvent: "Timeline Event",
+                loaded: "Loaded on Vessel",
+                powerLost: "Power Lost (Yard)",
+                downloadReport: "Download Claims Report"
+            },
+            es: {
+                tapConnect: "Tocar para Conectar",
+                range: "Rango 50m",
+                searching: "Buscando...",
+                keepClose: "Mantenga dispositivo cerca",
+                deviceFound: "Dispositivo Hallado",
+                syncing: "Sincronizando...",
+                syncingData: "Cargando Datos...",
+                dataSecured: "Datos Seguros",
+                systemSync: "Sincronizado a Nube",
+                shipperNotify: "Remitente notificado.",
+                rawData: "Datos Crudos",
+                pdfLog: "Registro PDF",
+                csvData: "Datos CSV",
+                recommended: "Recomendado",
+                echoIntel: "Inteligencia Echo",
+                rootCause: "Ver Causa Raíz",
+                newBadge: "NUEVO",
+                disconnect: "Desconectar",
+                qualityScore: "Puntaje Calidad",
+                container: "Contenedor",
+                deviation: "Desviación Detectada",
+                powerDisconnect: "Desconexión Energía",
+                analysisText: "Temp subió a -9.5°C durante 6h 20m en patio. Patrón coincide con apagado en transbordo.",
+                timelineEvent: "Evento Línea Tiempo",
+                loaded: "Cargado en Buque",
+                powerLost: "Energía Perdida (Patio)",
+                downloadReport: "Descargar Reporte"
+            },
+            zh: {
+                tapConnect: "点击连接",
+                range: "50米范围",
+                searching: "搜索中...",
+                keepClose: "保持设备靠近",
+                deviceFound: "发现设备",
+                syncing: "同步中...",
+                syncingData: "正在同步数据...",
+                dataSecured: "数据已保护",
+                systemSync: "已同步至云端",
+                shipperNotify: "发货人已收到通知",
+                rawData: "原始数据",
+                pdfLog: "PDF日志",
+                csvData: "CSV数据",
+                recommended: "推荐",
+                echoIntel: "Echo 智能",
+                rootCause: "查看根本原因",
+                newBadge: "新",
+                disconnect: "断开设备",
+                qualityScore: "质量评分",
+                container: "集装箱",
+                deviation: "检测到偏差",
+                powerDisconnect: "电源断开",
+                analysisText: "温度在堆场停留6小时20分钟期间升至-9.5°C。模式匹配转运断电。",
+                timelineEvent: "时间轴事件",
+                loaded: "装船",
+                powerLost: "断电 (堆场)",
+                downloadReport: "下载索赔报告"
+            },
+            ja: {
+                tapConnect: "タップして接続",
+                range: "範囲50m",
+                searching: "検索中...",
+                keepClose: "デバイスを近づけてください",
+                deviceFound: "デバイス検出",
+                syncing: "同期中...",
+                syncingData: "データ同期中...",
+                dataSecured: "データ保護完了",
+                systemSync: "クラウド同期完了",
+                shipperNotify: "荷送人に通知されました",
+                rawData: "生データ",
+                pdfLog: "PDFログ",
+                csvData: "CSVデータ",
+                recommended: "推奨",
+                echoIntel: "Echo インテリジェンス",
+                rootCause: "根本原因分析を表示",
+                newBadge: "新",
+                disconnect: "デバイス切断",
+                qualityScore: "品質スコア",
+                container: "コンテナ",
+                deviation: "逸脱を検出",
+                powerDisconnect: "電源切断",
+                analysisText: "ヤード滞留6時間20分の間に温度が-9.5°Cに上昇。積み替え時の電源オフと一致。",
+                timelineEvent: "タイムラインイベント",
+                loaded: "船積み",
+                powerLost: "電源喪失 (ヤード)",
+                downloadReport: "クレームレポートをダウンロード"
+            }
+        };
+
+        let currentLang = 'en';
+        let state = 'idle';
+
+        function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+        function selectLanguage(lang) {
+            currentLang = lang;
+            applyTranslations();
+            
+            // Fade out Language View, Show Main View
+            const viewLang = document.getElementById('view-language');
+            const viewMain = document.getElementById('view-main');
+            
+            viewLang.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                viewLang.style.display = 'none';
+                viewMain.classList.remove('opacity-0', 'pointer-events-none');
+            }, 500);
+        }
+
+        function applyTranslations() {
+            const t = translations[currentLang];
+            
+            // Update specific IDs
+            document.getElementById('txt-main').innerText = t.tapConnect;
+            document.getElementById('txt-sub').innerText = t.range;
+            
+            // Update Data Keys
+            document.querySelectorAll('[data-key]').forEach(el => {
+                const key = el.getAttribute('data-key');
+                if (t[key]) el.innerText = t[key];
+            });
+        }
+
+        async function handleTap() {
+            if (state !== 'idle') return;
+            
+            // Check Bluetooth support
+            if (!navigator.bluetooth) {
+                alert('Bluetooth not supported. Please use Chrome/Edge on desktop or Android.');
+                return;
+            }
+
+            state = 'scanning';
+            vibrate(30);
+
+            const orb = document.getElementById('orb');
+            const glow = document.getElementById('orb-glow');
+            const icon = document.getElementById('icon-main');
+            const txtMain = document.getElementById('txt-main');
+            const txtSub = document.getElementById('txt-sub');
+            const dot = document.getElementById('status-dot');
+            const t = translations[currentLang];
+
+            orb.classList.add('active');
+            glow.classList.remove('opacity-0');
+            icon.className = "fa-solid fa-wifi text-2xl text-cyan-400 animate-pulse";
+            txtMain.innerText = t.searching;
+            txtSub.innerText = t.keepClose;
+            dot.className = "w-2 h-2 rounded-full bg-yellow-500 animate-pulse";
+
+            try {
+                // Request BLE device
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { name: 'Suply Echo' },
+                        { namePrefix: 'Suply' },
+                        { namePrefix: 'BT' },
+                        { namePrefix: 'Echo' }
+                    ],
+                    optionalServices: COMMON_BLE_SERVICES
+                });
+
+                vibrate([40, 40]);
+                icon.className = "fa-solid fa-link text-3xl text-white";
+                txtMain.innerText = t.deviceFound;
+                txtSub.innerText = t.syncing;
+                dot.className = "w-2 h-2 rounded-full bg-cyan-500";
+
+                // Connect to GATT server
+                bleServer = await bleDevice.gatt.connect();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Read device info and fetch data
+                await readDeviceInfo();
+                await startSync();
+
+            } catch (error) {
+                console.error('BLE Error:', error);
+                state = 'idle';
+                orb.classList.remove('active');
+                glow.classList.add('opacity-0');
+                icon.className = "fa-brands fa-bluetooth-b text-4xl text-slate-400";
+                txtMain.innerText = t.tapConnect;
+                txtSub.innerText = t.range;
+                dot.className = "w-2 h-2 rounded-full bg-slate-700";
+                
+                if (error.name === 'NotFoundError') {
+                    alert('No device found. Make sure device is powered on and nearby.');
+                } else if (error.name === 'NotAllowedError') {
+                    alert('Bluetooth permission denied.');
+                } else {
+                    alert('Connection failed: ' + error.message);
+                }
+            }
+        }
+
+        async function readDeviceInfo() {
+            try {
+                const service = await bleServer.getPrimaryService(BLE_SERVICE_UUID);
+                const rxChar = await service.getCharacteristic(BLE_CHARACTERISTICS.RX);
+                const txChar = await service.getCharacteristic(BLE_CHARACTERISTICS.TX);
+                await txChar.startNotifications();
+
+                // Helper to send command
+                const sendCommand = (command, timeout = 5000) => {
+                    return new Promise((resolve, reject) => {
+                        const timer = setTimeout(() => reject(new Error('Timeout')), timeout);
+                        const handler = (e) => {
+                            clearTimeout(timer);
+                            txChar.removeEventListener('characteristicvaluechanged', handler);
+                            resolve(e.target.value);
+                        };
+                        txChar.addEventListener('characteristicvaluechanged', handler);
+                        rxChar.writeValue(command).catch(reject);
+                    });
+                };
+
+                // Read device ID
+                try {
+                    const idResponse = await sendCommand(BT03_COMMANDS.READ_DEVICE_ID);
+                    if (idResponse.byteLength >= 12) {
+                        const idBytes = [];
+                        for (let i = 4; i < 8; i++) {
+                            idBytes.push(idResponse.getUint8(i).toString(16).padStart(2, '0'));
+                        }
+                        deviceId = idBytes.join('').toUpperCase();
+                        console.log('Device ID:', deviceId);
+                    }
+                } catch (e) {
+                    console.warn('Could not read device ID');
+                    deviceId = 'UNKNOWN';
+                }
+            } catch (error) {
+                console.error('Error reading device info:', error);
+            }
+        }
+
+        async function startSync() {
+            state = 'syncing';
+            const icon = document.getElementById('icon-main');
+            const txtMain = document.getElementById('txt-main');
+            const txtSub = document.getElementById('txt-sub');
+            const ringContainer = document.getElementById('progress-container');
+            const ring = document.getElementById('progress-ring');
+            const t = translations[currentLang];
+            
+            icon.className = "fa-solid fa-arrow-down text-2xl text-cyan-400";
+            txtMain.innerText = t.syncingData;
+            txtSub.innerText = "0%";
+            ringContainer.classList.remove('opacity-0');
+
+            try {
+                const service = await bleServer.getPrimaryService(BLE_SERVICE_UUID);
+                const rxChar = await service.getCharacteristic(BLE_CHARACTERISTICS.RX);
+                const txChar = await service.getCharacteristic(BLE_CHARACTERISTICS.TX);
+                await txChar.startNotifications();
+
+                let progress = 0;
+                const totalLength = 553;
+                const allDataPackets = [];
+                let isReceiving = false;
+                let sensorType = 0x02;
+
+                // Query data type
+                await rxChar.writeValue(BT03_COMMANDS.QUERY_DATA_TYPE);
+                await new Promise(r => setTimeout(r, 500));
+
+                // Extract all data
+                await rxChar.writeValue(BT03_COMMANDS.EXTRACT_ALL_DATA);
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Data notification handler
+                const handleData = (e) => {
+                    const value = e.target.value;
+                    const packetType = value.byteLength >= 3 ? value.getUint8(2) : null;
+                    
+                    if (packetType === 0xFF) {
+                        // Start packet
+                        isReceiving = true;
+                        if (value.byteLength >= 4) {
+                            sensorType = value.getUint8(3);
+                        }
+                    } else if (packetType === 0xFE) {
+                        // End packet
+                        isReceiving = false;
+                    } else if (packetType === 0x01 || packetType === 0x02 || packetType === 0x03) {
+                        // Data packet
+                        allDataPackets.push(new DataView(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)));
+                        progress = Math.min(95, progress + 0.5);
+                        const offset = totalLength - (progress / 100) * totalLength;
+                        ring.style.strokeDashoffset = offset;
+                        txtSub.innerText = Math.floor(progress) + "%";
+                        if (Math.random() > 0.9) vibrate(10);
+                    }
+                };
+
+                txChar.addEventListener('characteristicvaluechanged', handleData);
+
+                // Start transmission
+                await rxChar.writeValue(BT03_COMMANDS.START_DATA_TRANSMISSION);
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Wait for data (max 30s)
+                let waitTime = 0;
+                while (waitTime < 30000 && (isReceiving || allDataPackets.length === 0)) {
+                    await new Promise(r => setTimeout(r, 500));
+                    waitTime += 500;
+                    if (!isReceiving && allDataPackets.length > 0) break;
+                }
+
+                txChar.removeEventListener('characteristicvaluechanged', handleData);
+                await txChar.stopNotifications();
+
+                // Parse data
+                rawDataPackets = allDataPackets;
+                temperatureData = parseBT03Packets(allDataPackets, sensorType);
+                
+                progress = 100;
+                ring.style.strokeDashoffset = 0;
+                txtSub.innerText = "100%";
+
+                // Upload to backend
+                await uploadToBackend();
+
+                // Update device ID display
+                const deviceIdEl = document.getElementById('device-id-display');
+                if (deviceIdEl) deviceIdEl.textContent = `ID: ${deviceId || 'UNKNOWN'}`;
+
+                setTimeout(() => finishSync(), 500);
+
+            } catch (error) {
+                console.error('Sync error:', error);
+                alert('Data sync failed: ' + error.message);
+                state = 'idle';
+            }
+        }
+
+        function parseBT03Packets(packets, sensorType) {
+            const readings = [];
+            const seenTimestamps = new Set();
+            const sensorDataSize = sensorType === 0x02 ? 4 : 2;
+
+            for (const packet of packets) {
+                const packageLength = packet.getUint16(0, true);
+                const packetType = packet.getUint8(2);
+
+                if (packetType === 0x01) {
+                    const dataLength = packageLength - 1;
+                    const recordSize = 4 + sensorDataSize;
+                    const numRecords = Math.floor(dataLength / recordSize);
+                    const dataEnd = 3 + dataLength;
+
+                    for (let i = 0; i < numRecords; i++) {
+                        const offset = 3 + (i * recordSize);
+                        if (offset + recordSize <= dataEnd) {
+                            const timestamp = packet.getUint32(offset, true);
+                            const tempRaw = packet.getUint16(offset + 4, true);
+                            const isNegative = (tempRaw & 0x8000) !== 0;
+                            const magnitude = tempRaw & 0x7FFF;
+                            const temperature = (isNegative ? -magnitude : magnitude) / 10;
+
+                            let humidity = undefined;
+                            if (sensorType === 0x02 && offset + 8 <= packet.byteLength) {
+                                const humidityRaw = packet.getUint16(offset + 6, true);
+                                const isNegativeH = (humidityRaw & 0x8000) !== 0;
+                                const magnitudeH = humidityRaw & 0x7FFF;
+                                humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                            }
+
+                            const timestampIso = new Date(timestamp * 1000).toISOString();
+                            if (!seenTimestamps.has(timestampIso) && temperature >= -200 && temperature <= 200) {
+                                seenTimestamps.add(timestampIso);
+                                readings.push({ timestamp: timestampIso, temperature, humidity });
+                            }
+                        }
+                    }
+                } else if (packetType === 0x03) {
+                    if (packageLength >= 1 + 8) {
+                        const timestamp = packet.getUint32(3, true);
+                        const interval = packet.getUint32(7, true);
+                        const dataLength = packageLength - 1 - 8;
+                        const recordSize = sensorDataSize;
+                        const numRecords = Math.floor(dataLength / recordSize);
+                        const dataStart = 11;
+                        const dataEnd = dataStart + dataLength;
+
+                        for (let i = 0; i < numRecords; i++) {
+                            const offset = dataStart + (i * recordSize);
+                            if (offset + recordSize <= dataEnd) {
+                                const tempRaw = packet.getUint16(offset, true);
+                                const isNegative = (tempRaw & 0x8000) !== 0;
+                                const magnitude = tempRaw & 0x7FFF;
+                                const temperature = (isNegative ? -magnitude : magnitude) / 10;
+                                const readingTimestamp = timestamp + (i * interval);
+                                const timestampIso = new Date(readingTimestamp * 1000).toISOString();
+
+                                let humidity = undefined;
+                                if (sensorType === 0x02 && offset + 4 <= packet.byteLength) {
+                                    const humidityRaw = packet.getUint16(offset + 2, true);
+                                    const isNegativeH = (humidityRaw & 0x8000) !== 0;
+                                    const magnitudeH = humidityRaw & 0x7FFF;
+                                    humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                                }
+
+                                if (!seenTimestamps.has(timestampIso) && temperature >= -200 && temperature <= 200) {
+                                    seenTimestamps.add(timestampIso);
+                                    readings.push({ timestamp: timestampIso, temperature, humidity });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return readings.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        }
+
+        async function uploadToBackend() {
+            if (temperatureData.length === 0) return;
+
+            try {
+                const payload = {
+                    deviceId: deviceId,
+                    scanMethod: 'generic_scan',
+                    temperatureReadings: temperatureData,
+                    scannerMetadata: {
+                        deviceName: bleDevice?.name,
+                        browser: navigator.userAgent,
+                        timestamp: new Date().toISOString()
+                    }
+                };
+
+                // Update API URL based on your backend
+                const apiUrl = window.location.origin.includes('localhost') 
+                    ? 'http://localhost:3001/api/v1/ble/upload-scan-data'
+                    : 'https://api.suply.com/api/v1/ble/upload-scan-data';
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Upload successful:', result);
+                // Update device ID display
+                const deviceIdEl = document.getElementById('device-id-display');
+                if (deviceIdEl) deviceIdEl.textContent = `ID: ${deviceId || result.data?.scanId || 'UNKNOWN'}`;
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+            }
+        }
+
+        function finishSync() {
+            state = 'done';
+            vibrate(100);
+            
+            document.getElementById('view-main').classList.add('opacity-0', 'pointer-events-none');
+            
+            setTimeout(() => {
+                document.getElementById('view-main').style.display = 'none';
+                const res = document.getElementById('view-result');
+                res.classList.remove('opacity-0', 'pointer-events-none');
+            }, 500);
+        }
+
+        function showDashboard() {
+            vibrate(30);
+            document.getElementById('view-dashboard').classList.remove('translate-x-full');
+        }
+
+        function hideDashboard() {
+            document.getElementById('view-dashboard').classList.add('translate-x-full');
+        }
+
+        async function fakeDownload(type) {
+            vibrate(50);
+            
+            if (type === 'PDF') {
+                await exportPDF();
+            } else if (type === 'CSV') {
+                exportCSV();
+            } else if (type === 'Report') {
+                await exportPDF(true); // Full report
+            }
+        }
+
+        function exportCSV() {
+            if (temperatureData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            const csvHeader = 'Timestamp,Temperature (°C),Humidity (%)\n';
+            const csvRows = temperatureData.map(r => 
+                `${r.timestamp},${r.temperature},${r.humidity || ''}`
+            ).join('\n');
+            const csvContent = csvHeader + csvRows;
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `echo-data-${deviceId || 'unknown'}-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        async function exportPDF(isFullReport = false) {
+            if (temperatureData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            // Load jsPDF dynamically
+            if (!window.jspdf) {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                document.head.appendChild(script);
+                await new Promise(resolve => {
+                    script.onload = resolve;
+                    setTimeout(resolve, 3000); // Fallback timeout
+                });
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageWidth;
+            const pageHeight = doc.internal.pageHeight;
+            let yPos = 20;
+
+            // Header
+            doc.setFontSize(18);
+            doc.text('Echo Data Report', pageWidth / 2, yPos, { align: 'center' });
+            yPos += 10;
+
+            doc.setFontSize(10);
+            doc.text(`Device ID: ${deviceId || 'Unknown'}`, 20, yPos);
+            yPos += 5;
+            doc.text(`Export Date: ${new Date().toLocaleString()}`, 20, yPos);
+            yPos += 5;
+            doc.text(`Total Readings: ${temperatureData.length}`, 20, yPos);
+            yPos += 10;
+
+            // Data table
+            doc.setFontSize(8);
+            const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)'];
+            const colWidths = [70, 50, 50];
+            let xPos = 20;
+
+            // Table header
+            doc.setFillColor(30, 30, 30);
+            doc.rect(xPos, yPos, pageWidth - 40, 8, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.text(headers[0], xPos + 2, yPos + 5);
+            doc.text(headers[1], xPos + colWidths[0] + 2, yPos + 5);
+            doc.text(headers[2], xPos + colWidths[0] + colWidths[1] + 2, yPos + 5);
+            yPos += 8;
+            doc.setTextColor(0, 0, 0);
+
+            // Table rows
+            const rowsPerPage = Math.floor((pageHeight - yPos - 20) / 6);
+            let rowCount = 0;
+
+            for (const reading of temperatureData) {
+                if (yPos > pageHeight - 20) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                const date = new Date(reading.timestamp);
+                const dateStr = date.toLocaleString();
+                doc.text(dateStr.substring(0, 16), xPos + 2, yPos + 4);
+                doc.text(reading.temperature.toFixed(1), xPos + colWidths[0] + 2, yPos + 4);
+                doc.text((reading.humidity || 'N/A').toString(), xPos + colWidths[0] + colWidths[1] + 2, yPos + 4);
+                yPos += 6;
+                rowCount++;
+            }
+
+            // Save
+            doc.save(`echo-report-${deviceId || 'unknown'}-${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        function reset() {
+            if (bleDevice && bleDevice.gatt?.connected) {
+                bleDevice.gatt.disconnect();
+            }
+            bleDevice = null;
+            bleServer = null;
+            deviceId = '';
+            temperatureData = [];
+            rawDataPackets = [];
+            state = 'idle';
+            location.reload();
+        }
+    </script>
+</body>
+</html>
