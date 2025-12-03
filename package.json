@@ -1,0 +1,15 @@
+{
+  "name": "suply-echo",
+  "version": "1.0.0",
+  "description": "Echo - AI-Powered Cold Chain Monitoring",
+  "scripts": {},
+  "keywords": [
+    "cold-chain",
+    "monitoring",
+    "reefer",
+    "temperature-logging"
+  ],
+  "author": "Suply",
+  "license": "MIT"
+}
+
