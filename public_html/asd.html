@@ -645,21 +645,51 @@
                 // Data notification handler
                 const handleData = (e) => {
                     const value = e.target.value;
-                    const packetType = value.byteLength >= 3 ? value.getUint8(2) : null;
                     
-                    if (packetType === 0xFF) {
-                        // Start packet
-                        isReceiving = true;
-                        if (value.byteLength >= 4) {
-                            sensorType = value.getUint8(3);
+                    // Check if this is a command response (starts with '&' 0x26)
+                    if (value.byteLength >= 1 && value.getUint8(0) === 0x26) {
+                        // Command response - handle sensor type query
+                        if (value.byteLength >= 6) {
+                            const cmd1 = value.getUint8(1);
+                            const cmd2 = value.getUint8(2);
+                            const status = value.getUint8(3);
+                            if (cmd1 === 0x6C && cmd2 === 0x04 && status === 0x01) {
+                                sensorType = value.getUint8(4);
+                                console.log('Sensor type detected:', sensorType);
+                            }
                         }
-                    } else if (packetType === 0xFE) {
-                        // End packet
+                        return; // Don't process command responses as data packets
+                    }
+                    
+                    // This is a data packet - read packet header
+                    if (value.byteLength < 3) {
+                        console.warn('Packet too small, ignoring');
+                        return;
+                    }
+                    
+                    const packageLength = value.getUint16(0, true);
+                    const packetType = value.getUint8(2);
+                    
+                    if (packetType === 0x00) {
+                        // Start packet - Format: length(2) + type(1) + numRecords(4)
+                        if (value.byteLength >= 7) {
+                            const numRecords = value.getUint32(3, true);
+                            console.log('Start packet: ' + numRecords + ' records expected');
+                        isReceiving = true;
+                            allDataPackets.length = 0; // Clear previous packets
+                        }
+                    } else if (packetType === 0xFF) {
+                        // Stop packet - Format: length(2) + type(1) + uploadedCount(4) + uploadedPackets(4)
+                        if (value.byteLength >= 11) {
+                            const uploadedCount = value.getUint32(3, true);
+                            const uploadedPackets = value.getUint32(7, true);
+                            console.log('Stop packet: ' + uploadedCount + ' records in ' + uploadedPackets + ' packets');
                         isReceiving = false;
+                        }
                     } else if (packetType === 0x01 || packetType === 0x02 || packetType === 0x03) {
-                        // Data packet
+                        // Data packet - store it
                         allDataPackets.push(new DataView(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)));
-                        progress = Math.min(95, progress + 0.5);
+                        progress = Math.min(95, progress + (100 / Math.max(1, allDataPackets.length)));
                         const offset = totalLength - (progress / 100) * totalLength;
                         ring.style.strokeDashoffset = offset;
                         txtSub.innerText = Math.floor(progress) + "%";
@@ -684,9 +714,15 @@
                 txChar.removeEventListener('characteristicvaluechanged', handleData);
                 await txChar.stopNotifications();
 
-                // Parse data
+                // Parse data with error handling
                 rawDataPackets = allDataPackets;
+                try {
                 temperatureData = parseBT03Packets(allDataPackets, sensorType);
+                    console.log(`Parsed ${temperatureData.length} temperature readings`);
+                } catch (parseError) {
+                    console.error('Parse error:', parseError);
+                    throw new Error('Failed to parse data: ' + parseError.message);
+                }
                 
                 progress = 100;
                 ring.style.strokeDashoffset = 0;
@@ -703,8 +739,34 @@
 
             } catch (error) {
                 console.error('Sync error:', error);
-                alert('Data sync failed: ' + error.message);
+                const errorMsg = error.message || 'Unknown error';
+                
+                // Provide user-friendly error message
+                if (errorMsg.includes('Offset is outside the bounds')) {
+                    alert('Data sync failed: Invalid data packet received. Please try again.');
+                } else {
+                    alert('Data sync failed: ' + errorMsg);
+                }
+                
+                // Reset UI
                 state = 'idle';
+                const orb = document.getElementById('orb');
+                const glow = document.getElementById('orb-glow');
+                const icon = document.getElementById('icon-main');
+                const txtMain = document.getElementById('txt-main');
+                const txtSub = document.getElementById('txt-sub');
+                const dot = document.getElementById('status-dot');
+                const t = translations[currentLang];
+                
+                orb.classList.remove('active');
+                glow.classList.add('opacity-0');
+                icon.className = "fa-brands fa-bluetooth-b text-4xl text-slate-400";
+                txtMain.innerText = t.tapConnect;
+                txtSub.innerText = t.range;
+                dot.className = "w-2 h-2 rounded-full bg-slate-700";
+                
+                const ringContainer = document.getElementById('progress-container');
+                if (ringContainer) ringContainer.classList.add('opacity-0');
             }
         }
 
@@ -713,19 +775,36 @@
             const seenTimestamps = new Set();
             const sensorDataSize = sensorType === 0x02 ? 4 : 2;
 
-            for (const packet of packets) {
+            for (let packetIdx = 0; packetIdx < packets.length; packetIdx++) {
+                const packet = packets[packetIdx];
+                
+                // Validate packet has minimum size
+                if (packet.byteLength < 3) {
+                    console.warn(`Packet ${packetIdx + 1} too small: ${packet.byteLength} bytes`);
+                    continue;
+                }
+                
                 const packageLength = packet.getUint16(0, true);
                 const packetType = packet.getUint8(2);
 
                 if (packetType === 0x01) {
-                    const dataLength = packageLength - 1;
-                    const recordSize = 4 + sensorDataSize;
+                    // Type 0x01: Timestamp + Data
+                    const dataLength = packageLength - 1; // Exclude type byte
+                    const recordSize = 4 + sensorDataSize; // 4 bytes timestamp + sensor data
                     const numRecords = Math.floor(dataLength / recordSize);
                     const dataEnd = 3 + dataLength;
 
                     for (let i = 0; i < numRecords; i++) {
-                        const offset = 3 + (i * recordSize);
-                        if (offset + recordSize <= dataEnd) {
+                        const offset = 3 + (i * recordSize); // Skip header (2 bytes length + 1 byte type)
+                        
+                        // CRITICAL: Check both calculated end AND actual buffer size
+                        if (offset + recordSize <= dataEnd && offset + recordSize <= packet.byteLength) {
+                            // Validate we have enough bytes for timestamp + temperature
+                            if (offset + 6 > packet.byteLength) {
+                                console.warn(`Packet ${packetIdx + 1}, Record ${i + 1}: Not enough bytes for timestamp+temp`);
+                                continue;
+                            }
+                            
                             const timestamp = packet.getUint32(offset, true);
                             const tempRaw = packet.getUint16(offset + 4, true);
                             const isNegative = (tempRaw & 0x8000) !== 0;
@@ -733,11 +812,14 @@
                             const temperature = (isNegative ? -magnitude : magnitude) / 10;
 
                             let humidity = undefined;
-                            if (sensorType === 0x02 && offset + 8 <= packet.byteLength) {
+                            if (sensorType === 0x02) {
+                                // Validate we have enough bytes for humidity
+                                if (offset + 8 <= packet.byteLength) {
                                 const humidityRaw = packet.getUint16(offset + 6, true);
                                 const isNegativeH = (humidityRaw & 0x8000) !== 0;
                                 const magnitudeH = humidityRaw & 0x7FFF;
                                 humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                                }
                             }
 
                             const timestampIso = new Date(timestamp * 1000).toISOString();
@@ -745,21 +827,77 @@
                                 seenTimestamps.add(timestampIso);
                                 readings.push({ timestamp: timestampIso, temperature, humidity });
                             }
+                        } else {
+                            console.warn(`Packet ${packetIdx + 1}, Record ${i + 1}: Offset out of bounds (offset: ${offset}, recordSize: ${recordSize}, dataEnd: ${dataEnd}, packet.byteLength: ${packet.byteLength})`);
+                        }
+                    }
+                } else if (packetType === 0x02) {
+                    // Type 0x02: Data only (no timestamps) - use current time as base
+                    const dataLength = packageLength - 1;
+                    const recordSize = sensorDataSize;
+                    const numRecords = Math.floor(dataLength / recordSize);
+                    const baseTimestampMs = Date.now();
+                    const dataEnd = 3 + dataLength;
+
+                    for (let i = 0; i < numRecords; i++) {
+                        const offset = 3 + (i * recordSize);
+                        
+                        if (offset + recordSize <= dataEnd && offset + recordSize <= packet.byteLength) {
+                            if (offset + 2 > packet.byteLength) {
+                                console.warn(`Packet ${packetIdx + 1}, Record ${i + 1} (0x02): Not enough bytes for temp`);
+                                continue;
+                            }
+                            
+                            const tempRaw = packet.getUint16(offset, true);
+                            const isNegative = (tempRaw & 0x8000) !== 0;
+                            const magnitude = tempRaw & 0x7FFF;
+                            const temperature = (isNegative ? -magnitude : magnitude) / 10;
+
+                            let humidity = undefined;
+                            if (sensorType === 0x02 && offset + 4 <= packet.byteLength) {
+                                const humidityRaw = packet.getUint16(offset + 2, true);
+                                const isNegativeH = (humidityRaw & 0x8000) !== 0;
+                                const magnitudeH = humidityRaw & 0x7FFF;
+                                humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                            }
+
+                            // Estimate timestamp with 1-second increments
+                            const estimatedTimeMs = baseTimestampMs + (i * 1000);
+                            const estimatedTimeIso = new Date(estimatedTimeMs).toISOString();
+
+                            if (temperature >= -200 && temperature <= 200) {
+                                readings.push({ timestamp: estimatedTimeIso, temperature, humidity });
+                            }
                         }
                     }
                 } else if (packetType === 0x03) {
+                    // Type 0x03: Timestamp + Interval + Data
+                    // Minimum size: 2(length) + 1(type) + 4(timestamp) + 4(interval) = 11 bytes
+                    if (packet.byteLength < 11) {
+                        console.warn(`Packet ${packetIdx + 1} (0x03): Too short: ${packet.byteLength} bytes`);
+                        continue;
+                    }
+                    
                     if (packageLength >= 1 + 8) {
                         const timestamp = packet.getUint32(3, true);
                         const interval = packet.getUint32(7, true);
-                        const dataLength = packageLength - 1 - 8;
+                        const dataLength = packageLength - 1 - 8; // Exclude type + timestamp + interval
                         const recordSize = sensorDataSize;
                         const numRecords = Math.floor(dataLength / recordSize);
-                        const dataStart = 11;
+                        const dataStart = 11; // 2(len)+1(type)+8(header)
                         const dataEnd = dataStart + dataLength;
 
                         for (let i = 0; i < numRecords; i++) {
                             const offset = dataStart + (i * recordSize);
-                            if (offset + recordSize <= dataEnd) {
+                            
+                            // CRITICAL: Check both calculated end AND actual buffer size
+                            if (offset + recordSize <= dataEnd && offset + recordSize <= packet.byteLength) {
+                                // Validate we have enough bytes for temperature
+                                if (offset + 2 > packet.byteLength) {
+                                    console.warn(`Packet ${packetIdx + 1}, Record ${i + 1} (0x03): Not enough bytes for temp`);
+                                    continue;
+                                }
+                                
                                 const tempRaw = packet.getUint16(offset, true);
                                 const isNegative = (tempRaw & 0x8000) !== 0;
                                 const magnitude = tempRaw & 0x7FFF;
@@ -768,20 +906,30 @@
                                 const timestampIso = new Date(readingTimestamp * 1000).toISOString();
 
                                 let humidity = undefined;
-                                if (sensorType === 0x02 && offset + 4 <= packet.byteLength) {
+                                if (sensorType === 0x02) {
+                                    // Validate we have enough bytes for humidity
+                                    if (offset + 4 <= packet.byteLength) {
                                     const humidityRaw = packet.getUint16(offset + 2, true);
                                     const isNegativeH = (humidityRaw & 0x8000) !== 0;
                                     const magnitudeH = humidityRaw & 0x7FFF;
                                     humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                                    }
                                 }
 
                                 if (!seenTimestamps.has(timestampIso) && temperature >= -200 && temperature <= 200) {
                                     seenTimestamps.add(timestampIso);
                                     readings.push({ timestamp: timestampIso, temperature, humidity });
                                 }
+                            } else {
+                                console.warn(`Packet ${packetIdx + 1}, Record ${i + 1} (0x03): Offset out of bounds (offset: ${offset}, recordSize: ${recordSize}, dataEnd: ${dataEnd}, packet.byteLength: ${packet.byteLength})`);
                             }
                         }
                     }
+                } else if (packetType === 0x00 || packetType === 0xFF) {
+                    // Start/Stop packets - skip parsing
+                    continue;
+                } else {
+                    console.warn(`Packet ${packetIdx + 1}: Unknown packet type 0x${packetType.toString(16)}`);
                 }
             }
 
