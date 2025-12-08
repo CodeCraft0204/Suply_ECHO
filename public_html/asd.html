@@ -168,9 +168,25 @@
                 </div>
             </div>
 
-            <div class="text-center h-14">
+            <div class="text-center h-14 mb-6">
                 <h1 id="txt-main" class="text-2xl font-medium text-white tracking-tight">Tap to Connect</h1>
                 <p id="txt-sub" class="text-slate-500 text-sm mt-1 font-mono opacity-60">50m Range</p>
+            </div>
+
+            <!-- Bluetooth Status Notification -->
+            <div id="bluetooth-status-banner" class="w-full max-w-xs action-card rounded-xl p-4 opacity-0 pointer-events-none transition-all duration-300" style="display: none;">
+                <div class="flex items-center gap-3">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-400 text-sm"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-slate-300 text-xs font-medium mb-1" data-key="bluetoothOff">Bluetooth is Turned Off</p>
+                        <p class="text-slate-500 text-[10px] leading-relaxed mb-2" data-key="enableBluetooth">Enable Bluetooth to connect to Echo devices.</p>
+                        <button onclick="checkBluetoothStatus()" class="text-[10px] text-cyan-400 hover:text-cyan-300 font-medium transition-colors" data-key="checkAgain">
+                            Check Again →
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -339,6 +355,8 @@
         let temperatureData = [];
         let rawDataPackets = [];
         let sensorType = 0x02; // Default: temp + humidity
+        let bluetoothEnabled = null; // null = checking, true = enabled, false = disabled
+        let checkingBluetooth = false;
 
         // ===== TRANSLATION DATA =====
         const translations = {
@@ -361,6 +379,9 @@
                 rootCause: "View Root Cause Analysis",
                 newBadge: "NEW",
                 disconnect: "Disconnect Device",
+                bluetoothOff: "Bluetooth is Turned Off",
+                enableBluetooth: "Please enable Bluetooth on your device to connect to Echo devices.",
+                checkAgain: "Check Again",
                 qualityScore: "Quality Score",
                 container: "Container",
                 deviation: "Deviation Detected",
@@ -390,6 +411,9 @@
                 rootCause: "Ver Causa Raíz",
                 newBadge: "NUEVO",
                 disconnect: "Desconectar",
+                bluetoothOff: "Bluetooth Desactivado",
+                enableBluetooth: "Por favor active Bluetooth en su dispositivo para conectar dispositivos Echo.",
+                checkAgain: "Verificar de Nuevo",
                 qualityScore: "Puntaje Calidad",
                 container: "Contenedor",
                 deviation: "Desviación Detectada",
@@ -419,6 +443,9 @@
                 rootCause: "查看根本原因",
                 newBadge: "新",
                 disconnect: "断开设备",
+                bluetoothOff: "蓝牙已关闭",
+                enableBluetooth: "请在设备上启用蓝牙以连接到 Echo 设备。",
+                checkAgain: "再次检查",
                 qualityScore: "质量评分",
                 container: "集装箱",
                 deviation: "检测到偏差",
@@ -448,6 +475,9 @@
                 rootCause: "根本原因分析を表示",
                 newBadge: "新",
                 disconnect: "デバイス切断",
+                bluetoothOff: "Bluetoothがオフです",
+                enableBluetooth: "Echoデバイスに接続するには、デバイスでBluetoothを有効にしてください。",
+                checkAgain: "再確認",
                 qualityScore: "品質スコア",
                 container: "コンテナ",
                 deviation: "逸脱を検出",
@@ -465,6 +495,87 @@
 
         function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
 
+        // ===== BLUETOOTH STATUS CHECKING =====
+        async function checkBluetoothStatus() {
+            checkingBluetooth = true;
+            updateBluetoothBanner();
+            
+            try {
+                if (!navigator.bluetooth) {
+                    bluetoothEnabled = false;
+                    updateBluetoothBanner();
+                    return;
+                }
+                
+                const bluetooth = navigator.bluetooth;
+                
+                // Check if Bluetooth is available
+                if (bluetooth.getAvailability) {
+                    const available = await bluetooth.getAvailability();
+                    bluetoothEnabled = available;
+                    
+                    if (!available) {
+                        console.warn('⚠️ Bluetooth is turned off');
+                    } else {
+                        console.log('✓ Bluetooth is enabled and ready');
+                    }
+                    
+                    // Listen for availability changes
+                    if (bluetooth.addEventListener) {
+                        bluetooth.addEventListener('availabilitychanged', (event) => {
+                            bluetoothEnabled = event.value;
+                            updateBluetoothBanner();
+                            
+                            if (event.value) {
+                                console.log('✓ Bluetooth enabled');
+                            } else {
+                                console.warn('⚠️ Bluetooth disabled');
+                            }
+                        });
+                    }
+                } else {
+                    // If getAvailability is not supported, assume it's available
+                    console.log('Bluetooth availability check not supported, assuming available');
+                    bluetoothEnabled = true;
+                }
+            } catch (error) {
+                console.error('Error checking Bluetooth status:', error);
+                // Assume available if we can't check
+                bluetoothEnabled = true;
+            } finally {
+                checkingBluetooth = false;
+                updateBluetoothBanner();
+            }
+        }
+
+        function updateBluetoothBanner() {
+            const banner = document.getElementById('bluetooth-status-banner');
+            if (!banner) return;
+            
+            if (checkingBluetooth) {
+                banner.style.display = 'none';
+                banner.classList.add('opacity-0', 'pointer-events-none');
+            } else if (bluetoothEnabled === false) {
+                banner.style.display = 'block';
+                // Use setTimeout to trigger transition after display change
+                setTimeout(() => {
+                    banner.classList.remove('opacity-0', 'pointer-events-none');
+                }, 10);
+            } else {
+                banner.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => {
+                    banner.style.display = 'none';
+                }, 300);
+            }
+        }
+
+        // Check Bluetooth status on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', checkBluetoothStatus);
+        } else {
+            checkBluetoothStatus();
+        }
+
         function selectLanguage(lang) {
             currentLang = lang;
             applyTranslations();
@@ -477,6 +588,8 @@
             setTimeout(() => {
                 viewLang.style.display = 'none';
                 viewMain.classList.remove('opacity-0', 'pointer-events-none');
+                // Update Bluetooth banner when main view becomes visible
+                updateBluetoothBanner();
             }, 500);
         }
 
@@ -501,6 +614,21 @@
             if (!navigator.bluetooth) {
                 alert('Bluetooth not supported. Please use Chrome/Edge on desktop or Android.');
                 return;
+            }
+            
+            // Check Bluetooth availability
+            if (bluetoothEnabled === false) {
+                alert('Bluetooth is turned off. Please enable Bluetooth on your device.');
+                return;
+            }
+            
+            // If status is unknown, check it first
+            if (bluetoothEnabled === null && !checkingBluetooth) {
+                await checkBluetoothStatus();
+                if (bluetoothEnabled === false) {
+                    alert('Bluetooth is turned off. Please enable Bluetooth on your device.');
+                    return;
+                }
             }
 
             state = 'scanning';
@@ -645,21 +773,51 @@
                 // Data notification handler
                 const handleData = (e) => {
                     const value = e.target.value;
-                    const packetType = value.byteLength >= 3 ? value.getUint8(2) : null;
                     
-                    if (packetType === 0xFF) {
-                        // Start packet
-                        isReceiving = true;
-                        if (value.byteLength >= 4) {
-                            sensorType = value.getUint8(3);
+                    // Check if this is a command response (starts with '&' 0x26)
+                    if (value.byteLength >= 1 && value.getUint8(0) === 0x26) {
+                        // Command response - handle sensor type query
+                        if (value.byteLength >= 6) {
+                            const cmd1 = value.getUint8(1);
+                            const cmd2 = value.getUint8(2);
+                            const status = value.getUint8(3);
+                            if (cmd1 === 0x6C && cmd2 === 0x04 && status === 0x01) {
+                                sensorType = value.getUint8(4);
+                                console.log('Sensor type detected:', sensorType);
+                            }
                         }
-                    } else if (packetType === 0xFE) {
-                        // End packet
+                        return; // Don't process command responses as data packets
+                    }
+                    
+                    // This is a data packet - read packet header
+                    if (value.byteLength < 3) {
+                        console.warn('Packet too small, ignoring');
+                        return;
+                    }
+                    
+                    const packageLength = value.getUint16(0, true);
+                    const packetType = value.getUint8(2);
+                    
+                    if (packetType === 0x00) {
+                        // Start packet - Format: length(2) + type(1) + numRecords(4)
+                        if (value.byteLength >= 7) {
+                            const numRecords = value.getUint32(3, true);
+                            console.log('Start packet: ' + numRecords + ' records expected');
+                        isReceiving = true;
+                            allDataPackets.length = 0; // Clear previous packets
+                        }
+                    } else if (packetType === 0xFF) {
+                        // Stop packet - Format: length(2) + type(1) + uploadedCount(4) + uploadedPackets(4)
+                        if (value.byteLength >= 11) {
+                            const uploadedCount = value.getUint32(3, true);
+                            const uploadedPackets = value.getUint32(7, true);
+                            console.log('Stop packet: ' + uploadedCount + ' records in ' + uploadedPackets + ' packets');
                         isReceiving = false;
+                        }
                     } else if (packetType === 0x01 || packetType === 0x02 || packetType === 0x03) {
-                        // Data packet
+                        // Data packet - store it
                         allDataPackets.push(new DataView(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)));
-                        progress = Math.min(95, progress + 0.5);
+                        progress = Math.min(95, progress + (100 / Math.max(1, allDataPackets.length)));
                         const offset = totalLength - (progress / 100) * totalLength;
                         ring.style.strokeDashoffset = offset;
                         txtSub.innerText = Math.floor(progress) + "%";
@@ -684,9 +842,15 @@
                 txChar.removeEventListener('characteristicvaluechanged', handleData);
                 await txChar.stopNotifications();
 
-                // Parse data
+                // Parse data with error handling
                 rawDataPackets = allDataPackets;
+                try {
                 temperatureData = parseBT03Packets(allDataPackets, sensorType);
+                    console.log(`Parsed ${temperatureData.length} temperature readings`);
+                } catch (parseError) {
+                    console.error('Parse error:', parseError);
+                    throw new Error('Failed to parse data: ' + parseError.message);
+                }
                 
                 progress = 100;
                 ring.style.strokeDashoffset = 0;
@@ -703,8 +867,34 @@
 
             } catch (error) {
                 console.error('Sync error:', error);
-                alert('Data sync failed: ' + error.message);
+                const errorMsg = error.message || 'Unknown error';
+                
+                // Provide user-friendly error message
+                if (errorMsg.includes('Offset is outside the bounds')) {
+                    alert('Data sync failed: Invalid data packet received. Please try again.');
+                } else {
+                    alert('Data sync failed: ' + errorMsg);
+                }
+                
+                // Reset UI
                 state = 'idle';
+                const orb = document.getElementById('orb');
+                const glow = document.getElementById('orb-glow');
+                const icon = document.getElementById('icon-main');
+                const txtMain = document.getElementById('txt-main');
+                const txtSub = document.getElementById('txt-sub');
+                const dot = document.getElementById('status-dot');
+                const t = translations[currentLang];
+                
+                orb.classList.remove('active');
+                glow.classList.add('opacity-0');
+                icon.className = "fa-brands fa-bluetooth-b text-4xl text-slate-400";
+                txtMain.innerText = t.tapConnect;
+                txtSub.innerText = t.range;
+                dot.className = "w-2 h-2 rounded-full bg-slate-700";
+                
+                const ringContainer = document.getElementById('progress-container');
+                if (ringContainer) ringContainer.classList.add('opacity-0');
             }
         }
 
@@ -713,19 +903,36 @@
             const seenTimestamps = new Set();
             const sensorDataSize = sensorType === 0x02 ? 4 : 2;
 
-            for (const packet of packets) {
+            for (let packetIdx = 0; packetIdx < packets.length; packetIdx++) {
+                const packet = packets[packetIdx];
+                
+                // Validate packet has minimum size
+                if (packet.byteLength < 3) {
+                    console.warn(`Packet ${packetIdx + 1} too small: ${packet.byteLength} bytes`);
+                    continue;
+                }
+                
                 const packageLength = packet.getUint16(0, true);
                 const packetType = packet.getUint8(2);
 
                 if (packetType === 0x01) {
-                    const dataLength = packageLength - 1;
-                    const recordSize = 4 + sensorDataSize;
+                    // Type 0x01: Timestamp + Data
+                    const dataLength = packageLength - 1; // Exclude type byte
+                    const recordSize = 4 + sensorDataSize; // 4 bytes timestamp + sensor data
                     const numRecords = Math.floor(dataLength / recordSize);
                     const dataEnd = 3 + dataLength;
 
                     for (let i = 0; i < numRecords; i++) {
-                        const offset = 3 + (i * recordSize);
-                        if (offset + recordSize <= dataEnd) {
+                        const offset = 3 + (i * recordSize); // Skip header (2 bytes length + 1 byte type)
+                        
+                        // CRITICAL: Check both calculated end AND actual buffer size
+                        if (offset + recordSize <= dataEnd && offset + recordSize <= packet.byteLength) {
+                            // Validate we have enough bytes for timestamp + temperature
+                            if (offset + 6 > packet.byteLength) {
+                                console.warn(`Packet ${packetIdx + 1}, Record ${i + 1}: Not enough bytes for timestamp+temp`);
+                                continue;
+                            }
+                            
                             const timestamp = packet.getUint32(offset, true);
                             const tempRaw = packet.getUint16(offset + 4, true);
                             const isNegative = (tempRaw & 0x8000) !== 0;
@@ -733,11 +940,14 @@
                             const temperature = (isNegative ? -magnitude : magnitude) / 10;
 
                             let humidity = undefined;
-                            if (sensorType === 0x02 && offset + 8 <= packet.byteLength) {
+                            if (sensorType === 0x02) {
+                                // Validate we have enough bytes for humidity
+                                if (offset + 8 <= packet.byteLength) {
                                 const humidityRaw = packet.getUint16(offset + 6, true);
                                 const isNegativeH = (humidityRaw & 0x8000) !== 0;
                                 const magnitudeH = humidityRaw & 0x7FFF;
                                 humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                                }
                             }
 
                             const timestampIso = new Date(timestamp * 1000).toISOString();
@@ -745,21 +955,77 @@
                                 seenTimestamps.add(timestampIso);
                                 readings.push({ timestamp: timestampIso, temperature, humidity });
                             }
+                        } else {
+                            console.warn(`Packet ${packetIdx + 1}, Record ${i + 1}: Offset out of bounds (offset: ${offset}, recordSize: ${recordSize}, dataEnd: ${dataEnd}, packet.byteLength: ${packet.byteLength})`);
+                        }
+                    }
+                } else if (packetType === 0x02) {
+                    // Type 0x02: Data only (no timestamps) - use current time as base
+                    const dataLength = packageLength - 1;
+                    const recordSize = sensorDataSize;
+                    const numRecords = Math.floor(dataLength / recordSize);
+                    const baseTimestampMs = Date.now();
+                    const dataEnd = 3 + dataLength;
+
+                    for (let i = 0; i < numRecords; i++) {
+                        const offset = 3 + (i * recordSize);
+                        
+                        if (offset + recordSize <= dataEnd && offset + recordSize <= packet.byteLength) {
+                            if (offset + 2 > packet.byteLength) {
+                                console.warn(`Packet ${packetIdx + 1}, Record ${i + 1} (0x02): Not enough bytes for temp`);
+                                continue;
+                            }
+                            
+                            const tempRaw = packet.getUint16(offset, true);
+                            const isNegative = (tempRaw & 0x8000) !== 0;
+                            const magnitude = tempRaw & 0x7FFF;
+                            const temperature = (isNegative ? -magnitude : magnitude) / 10;
+
+                            let humidity = undefined;
+                            if (sensorType === 0x02 && offset + 4 <= packet.byteLength) {
+                                const humidityRaw = packet.getUint16(offset + 2, true);
+                                const isNegativeH = (humidityRaw & 0x8000) !== 0;
+                                const magnitudeH = humidityRaw & 0x7FFF;
+                                humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                            }
+
+                            // Estimate timestamp with 1-second increments
+                            const estimatedTimeMs = baseTimestampMs + (i * 1000);
+                            const estimatedTimeIso = new Date(estimatedTimeMs).toISOString();
+
+                            if (temperature >= -200 && temperature <= 200) {
+                                readings.push({ timestamp: estimatedTimeIso, temperature, humidity });
+                            }
                         }
                     }
                 } else if (packetType === 0x03) {
+                    // Type 0x03: Timestamp + Interval + Data
+                    // Minimum size: 2(length) + 1(type) + 4(timestamp) + 4(interval) = 11 bytes
+                    if (packet.byteLength < 11) {
+                        console.warn(`Packet ${packetIdx + 1} (0x03): Too short: ${packet.byteLength} bytes`);
+                        continue;
+                    }
+                    
                     if (packageLength >= 1 + 8) {
                         const timestamp = packet.getUint32(3, true);
                         const interval = packet.getUint32(7, true);
-                        const dataLength = packageLength - 1 - 8;
+                        const dataLength = packageLength - 1 - 8; // Exclude type + timestamp + interval
                         const recordSize = sensorDataSize;
                         const numRecords = Math.floor(dataLength / recordSize);
-                        const dataStart = 11;
+                        const dataStart = 11; // 2(len)+1(type)+8(header)
                         const dataEnd = dataStart + dataLength;
 
                         for (let i = 0; i < numRecords; i++) {
                             const offset = dataStart + (i * recordSize);
-                            if (offset + recordSize <= dataEnd) {
+                            
+                            // CRITICAL: Check both calculated end AND actual buffer size
+                            if (offset + recordSize <= dataEnd && offset + recordSize <= packet.byteLength) {
+                                // Validate we have enough bytes for temperature
+                                if (offset + 2 > packet.byteLength) {
+                                    console.warn(`Packet ${packetIdx + 1}, Record ${i + 1} (0x03): Not enough bytes for temp`);
+                                    continue;
+                                }
+                                
                                 const tempRaw = packet.getUint16(offset, true);
                                 const isNegative = (tempRaw & 0x8000) !== 0;
                                 const magnitude = tempRaw & 0x7FFF;
@@ -768,20 +1034,30 @@
                                 const timestampIso = new Date(readingTimestamp * 1000).toISOString();
 
                                 let humidity = undefined;
-                                if (sensorType === 0x02 && offset + 4 <= packet.byteLength) {
+                                if (sensorType === 0x02) {
+                                    // Validate we have enough bytes for humidity
+                                    if (offset + 4 <= packet.byteLength) {
                                     const humidityRaw = packet.getUint16(offset + 2, true);
                                     const isNegativeH = (humidityRaw & 0x8000) !== 0;
                                     const magnitudeH = humidityRaw & 0x7FFF;
                                     humidity = (isNegativeH ? -magnitudeH : magnitudeH) / 10;
+                                    }
                                 }
 
                                 if (!seenTimestamps.has(timestampIso) && temperature >= -200 && temperature <= 200) {
                                     seenTimestamps.add(timestampIso);
                                     readings.push({ timestamp: timestampIso, temperature, humidity });
                                 }
+                            } else {
+                                console.warn(`Packet ${packetIdx + 1}, Record ${i + 1} (0x03): Offset out of bounds (offset: ${offset}, recordSize: ${recordSize}, dataEnd: ${dataEnd}, packet.byteLength: ${packet.byteLength})`);
                             }
                         }
                     }
+                } else if (packetType === 0x00 || packetType === 0xFF) {
+                    // Start/Stop packets - skip parsing
+                    continue;
+                } else {
+                    console.warn(`Packet ${packetIdx + 1}: Unknown packet type 0x${packetType.toString(16)}`);
                 }
             }
 
